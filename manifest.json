@@ -2,7 +2,7 @@
   "$schema": "https://raw.githubusercontent.com/aleksey-hoffman/sigma-file-manager/v2/src/modules/extensions/sdk/manifest.schema.json",
   "id": "sigma.video-downloader",
   "name": "Video Downloader",
-  "version": "0.1.4",
+  "version": "0.1.6",
   "description": "Download videos using yt-dlp with quality and format options.",
   "author": {
     "name": "Aleksey Hoffman",

@@ -34,7 +34,7 @@ This extension requires:
 1. Open the command palette (Ctrl+Shift+P)
 2. Run **Download video from URL**
 3. Enter the URL and select quality options
-4. Choose the output file path
+4. Downloaded files are saved to the current directory
 
 ## Development
 

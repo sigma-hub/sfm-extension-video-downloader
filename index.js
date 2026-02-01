@@ -8,6 +8,14 @@ function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
+function parseDownloadProgress(line) {
+  const match = line.match(/(\d+(?:\.\d+)?)%/);
+  if (!match) return null;
+  const percent = Number(match[1]);
+  if (Number.isNaN(percent)) return null;
+  return Math.max(0, Math.min(100, percent));
+}
+
 const VIDEO_QUALITY_OPTIONS = [
   { value: 'best', label: 'Best available' },
   { value: '1080', label: '1080p' },
@@ -322,7 +330,7 @@ function createDownloadModal() {
 
 async function runYtDlp(binaryPath, options) {
   const formatSelector = buildFormatSelector(options.mode, options.videoQuality, options.audioQuality);
-  const args = ['--no-playlist', '-f', formatSelector];
+  const args = ['--no-playlist', '--newline', '-f', formatSelector];
 
   if (options.mode === 'audio-only') {
     args.push('-x', '--audio-format', 'mp3');
@@ -334,12 +342,50 @@ async function runYtDlp(binaryPath, options) {
   }
 
   args.push(options.url);
-  const result = await sigma.shell.run(binaryPath, args);
 
-  if (result.code !== 0) {
+  let lastPercent = 0;
+
+  const { result, cancel } = await sigma.shell.runWithProgress(
+    binaryPath,
+    args,
+    (payload) => {
+      const line = payload.line.trim();
+      if (!line) return;
+      if (line.includes('[download]')) {
+        const percent = parseDownloadProgress(line);
+        if (percent !== null) {
+          const increment = Math.max(0, percent - lastPercent);
+          lastPercent = percent;
+          if (options.onProgress) {
+            options.onProgress({
+              message: line.replace('[download]', '').trim(),
+              increment
+            });
+          }
+          return;
+        }
+      }
+
+      if (line.includes('[Merger]') || line.includes('[ExtractAudio]') || line.includes('[ffmpeg]')) {
+        if (options.onProgress) {
+          options.onProgress({ message: line, increment: 0 });
+        }
+      }
+    }
+  );
+
+  if (options.onCancel) {
+    options.onCancel(async () => {
+      await cancel();
+    });
+  }
+
+  const commandResult = await result;
+
+  if (commandResult.code !== 0) {
     sigma.ui.showNotification({
       title: 'Download failed',
-      message: result.stderr || 'yt-dlp exited with an error.',
+      message: commandResult.stderr || 'yt-dlp exited with an error.',
       type: 'error'
     });
   }
@@ -373,13 +419,53 @@ async function handleDownloadCommand(context) {
     });
   }
 
-  await runYtDlp(installResult.binaryPath, {
-    url: modalResult.url,
-    mode: modalResult.mode,
-    videoQuality: modalResult.videoQuality,
-    audioQuality: modalResult.audioQuality,
-    outputDir
-  });
+  const progressResult = await sigma.ui.withProgress(
+    {
+      title: 'Downloading video',
+      location: 'notification',
+      cancellable: true
+    },
+    async (progress, token) => {
+      let onCancelHandler = null;
+      token.onCancellationRequested(() => {
+        if (onCancelHandler) {
+          onCancelHandler();
+        }
+      });
+
+      await runYtDlp(installResult.binaryPath, {
+        url: modalResult.url,
+        mode: modalResult.mode,
+        videoQuality: modalResult.videoQuality,
+        audioQuality: modalResult.audioQuality,
+        outputDir,
+        onProgress: (value) => progress.report(value),
+        onCancel: (handler) => {
+          onCancelHandler = handler;
+        }
+      });
+
+      if (token.isCancellationRequested) {
+        return { cancelled: true };
+      }
+
+      progress.report({
+        message: 'Download complete',
+        increment: 100
+      });
+
+      await sleep(1500);
+      return { cancelled: false };
+    }
+  );
+
+  if (progressResult.cancelled) {
+    sigma.ui.showNotification({
+      title: 'Video Downloader',
+      message: 'Download cancelled',
+      type: 'warning'
+    });
+  }
 }
 
 async function handleStartupActivation(context) {
