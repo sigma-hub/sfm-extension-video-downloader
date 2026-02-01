@@ -4,6 +4,10 @@ const STORAGE_DOWNLOAD_IN_PROGRESS_KEY = 'ytDlpDownloadInProgress';
 const STORAGE_LAST_DOWNLOAD_AT_KEY = 'ytDlpLastDownloadAt';
 const DOWNLOAD_COOLDOWN_MS = 2 * 60 * 1000;
 
+function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
 const VIDEO_QUALITY_OPTIONS = [
   { value: 'best', label: 'Best available' },
   { value: '1080', label: '1080p' },
@@ -117,6 +121,8 @@ async function downloadBinaryWithProgress(downloadUrl, binaryPath, versionLabel)
         message: 'Download complete',
         increment: 100 - progressValue
       });
+
+      await sleep(1500);
 
       return { cancelled: false };
     }
@@ -322,19 +328,19 @@ async function runYtDlp(binaryPath, options) {
     args.push('-x', '--audio-format', 'mp3');
   }
 
-  if (options.outputPath) {
-    args.push('-o', options.outputPath);
+  if (options.outputDir) {
+    args.push('-P', options.outputDir);
+    args.push('-o', '%(title)s.%(ext)s');
   }
 
   args.push(options.url);
   const result = await sigma.shell.run(binaryPath, args);
 
   if (result.code !== 0) {
-    await sigma.ui.showDialog({
+    sigma.ui.showNotification({
       title: 'Download failed',
       message: result.stderr || 'yt-dlp exited with an error.',
-      type: 'error',
-      confirmText: 'OK'
+      type: 'error'
     });
   }
 }
@@ -346,11 +352,14 @@ async function handleDownloadCommand(context) {
     return;
   }
 
-  const outputPath = await sigma.dialog.saveFile({
-    title: 'Select output file'
-  });
+  const outputDir = sigma.context.getCurrentPath();
 
-  if (!outputPath) {
+  if (!outputDir) {
+    sigma.ui.showNotification({
+      title: 'Video Downloader',
+      message: 'No current directory selected.',
+      type: 'error'
+    });
     return;
   }
 
@@ -369,7 +378,7 @@ async function handleDownloadCommand(context) {
     mode: modalResult.mode,
     videoQuality: modalResult.videoQuality,
     audioQuality: modalResult.audioQuality,
-    outputPath
+    outputDir
   });
 }
 

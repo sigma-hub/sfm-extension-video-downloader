@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+## [0.1.4] - 2026-02-01
+
+### Changed
+
+- Download videos into the current navigator directory without save dialog.
+
+## [0.1.3] - 2026-02-01
+
+### Fixed
+
+- Keep the download progress toast visible until completion.
+
 ## [0.1.2] - 2026-02-01
 
 ### Fixed

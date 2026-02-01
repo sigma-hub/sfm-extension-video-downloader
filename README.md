@@ -22,7 +22,6 @@ An official extension for Sigma File Manager that downloads videos using yt-dlp.
 This extension requires:
 
 - `commands` for command palette integration
-- `dialogs` for the output file picker
 - `notifications` for status messages
 - `fs.read` and `fs.write` to store the yt-dlp binary
 
