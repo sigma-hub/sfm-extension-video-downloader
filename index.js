@@ -16,6 +16,10 @@ function parseDownloadProgress(line) {
   return Math.max(0, Math.min(100, percent));
 }
 
+function formatProgressMessage(line) {
+  return line.replace(/^\[[^\]]+\]\s*/, '').trim();
+}
+
 const VIDEO_QUALITY_OPTIONS = [
   { value: 'best', label: 'Best available' },
   { value: '1080', label: '1080p' },
@@ -358,17 +362,31 @@ async function runYtDlp(binaryPath, options) {
           lastPercent = percent;
           if (options.onProgress) {
             options.onProgress({
-              message: line.replace('[download]', '').trim(),
+              message: formatProgressMessage(line),
               increment
             });
           }
           return;
         }
+
+        if (options.onProgress) {
+          options.onProgress({
+            message: formatProgressMessage(line),
+            increment: 0
+          });
+        }
+        return;
       }
 
-      if (line.includes('[Merger]') || line.includes('[ExtractAudio]') || line.includes('[ffmpeg]')) {
+      if (
+        line.includes('[Merger]')
+        || line.includes('[ExtractAudio]')
+        || line.includes('[ffmpeg]')
+        || line.includes('[info]')
+        || line.includes('[youtube]')
+      ) {
         if (options.onProgress) {
-          options.onProgress({ message: line, increment: 0 });
+          options.onProgress({ message: formatProgressMessage(line), increment: 0 });
         }
       }
     }
