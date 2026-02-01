@@ -1,5 +1,8 @@
 const STORAGE_VERSION_KEY = 'ytDlpVersion';
 const STORAGE_BINARY_PATH_KEY = 'ytDlpBinaryPath';
+const STORAGE_DOWNLOAD_IN_PROGRESS_KEY = 'ytDlpDownloadInProgress';
+const STORAGE_LAST_DOWNLOAD_AT_KEY = 'ytDlpLastDownloadAt';
+const DOWNLOAD_COOLDOWN_MS = 2 * 60 * 1000;
 
 const VIDEO_QUALITY_OPTIONS = [
   { value: 'best', label: 'Best available' },
@@ -133,6 +136,17 @@ async function ensureBinaryInstalled(context, options) {
   const shouldCheckUpdates = options?.checkUpdates && (options?.ignoreAutoUpdate ? true : isAutoUpdateEnabled);
   const currentVersion = await sigma.storage.get(STORAGE_VERSION_KEY);
   const exists = await sigma.fs.exists(binaryPath);
+  const lastDownloadAt = await sigma.storage.get(STORAGE_LAST_DOWNLOAD_AT_KEY);
+  const inProgress = await sigma.storage.get(STORAGE_DOWNLOAD_IN_PROGRESS_KEY);
+  const now = Date.now();
+
+  if (inProgress) {
+    return { binaryPath, didDownload: false };
+  }
+
+  if (lastDownloadAt && now - lastDownloadAt < DOWNLOAD_COOLDOWN_MS) {
+    return { binaryPath, didDownload: false };
+  }
 
   if (!exists || shouldCheckUpdates || options?.forceDownload) {
     const latestRelease = await getLatestReleaseInfo();
@@ -141,13 +155,20 @@ async function ensureBinaryInstalled(context, options) {
     if (options?.forceDownload || !exists || currentVersion !== latestVersion) {
       const assetName = getBinaryAssetName(platformInfo);
       const downloadUrl = getAssetDownloadUrl(latestRelease, assetName);
-      await downloadBinaryWithProgress(downloadUrl, binaryPath, latestVersion);
-      await sigma.storage.set(STORAGE_VERSION_KEY, latestVersion);
-      await sigma.storage.set(STORAGE_BINARY_PATH_KEY, binaryPath);
+      await sigma.storage.set(STORAGE_DOWNLOAD_IN_PROGRESS_KEY, true);
+      try {
+        await downloadBinaryWithProgress(downloadUrl, binaryPath, latestVersion);
+        await sigma.storage.set(STORAGE_VERSION_KEY, latestVersion);
+        await sigma.storage.set(STORAGE_BINARY_PATH_KEY, binaryPath);
+        await sigma.storage.set(STORAGE_LAST_DOWNLOAD_AT_KEY, now);
+        return { binaryPath, didDownload: true };
+      } finally {
+        await sigma.storage.remove(STORAGE_DOWNLOAD_IN_PROGRESS_KEY);
+      }
     }
   }
 
-  return binaryPath;
+  return { binaryPath, didDownload: false };
 }
 
 function buildFormatSelector(mode, videoQuality, audioQuality) {
@@ -333,9 +354,17 @@ async function handleDownloadCommand(context) {
     return;
   }
 
-  const binaryPath = await ensureBinaryInstalled(context, { checkUpdates: false });
+  const installResult = await ensureBinaryInstalled(context, { checkUpdates: false });
 
-  await runYtDlp(binaryPath, {
+  if (installResult.didDownload) {
+    sigma.ui.showNotification({
+      title: 'Video Downloader',
+      message: 'yt-dlp was downloaded',
+      type: 'success'
+    });
+  }
+
+  await runYtDlp(installResult.binaryPath, {
     url: modalResult.url,
     mode: modalResult.mode,
     videoQuality: modalResult.videoQuality,
@@ -350,7 +379,14 @@ async function handleStartupActivation(context) {
   if (!autoUpdate) return;
 
   try {
-    await ensureBinaryInstalled(context, { checkUpdates: true });
+    const installResult = await ensureBinaryInstalled(context, { checkUpdates: true });
+    if (installResult.didDownload) {
+      sigma.ui.showNotification({
+        title: 'Video Downloader',
+        message: 'yt-dlp was updated',
+        type: 'success'
+      });
+    }
   } catch (error) {
     sigma.ui.showNotification({
       title: 'Video Downloader',
@@ -362,10 +398,10 @@ async function handleStartupActivation(context) {
 
 async function handleInstallActivation(context) {
   try {
-    await ensureBinaryInstalled(context, { checkUpdates: true, ignoreAutoUpdate: true, forceDownload: true });
+    const installResult = await ensureBinaryInstalled(context, { checkUpdates: true, ignoreAutoUpdate: true, forceDownload: true });
     sigma.ui.showNotification({
       title: 'Video Downloader',
-      message: 'yt-dlp was downloaded successfully',
+      message: installResult.didDownload ? 'yt-dlp was downloaded successfully' : 'yt-dlp is ready',
       type: 'success'
     });
   } catch (error) {
