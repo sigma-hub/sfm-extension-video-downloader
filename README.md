@@ -50,7 +50,3 @@ curl -O https://raw.githubusercontent.com/aleksey-hoffman/sigma-file-manager/v2/
 ## License
 
 MIT
-
-## Metadata
-
-Repository metadata refresh.
