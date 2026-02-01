@@ -85,58 +85,36 @@ async function downloadBinaryWithProgress(downloadUrl, binaryPath, versionLabel)
       cancellable: true
     },
     async (progress, token) => {
-      const response = await fetch(downloadUrl);
-
-      if (!response.ok) {
-        throw new Error(`Download failed: ${response.status}`);
+      if (token.isCancellationRequested) {
+        return { cancelled: true };
       }
 
-      const contentLengthHeader = response.headers.get('content-length');
-      const totalBytes = contentLengthHeader ? Number(contentLengthHeader) : 0;
-      const reader = response.body?.getReader();
-
-      if (!reader) {
-        throw new Error('Download stream not available');
-      }
-
-      const chunks = [];
-      let receivedBytes = 0;
-      let lastProgressPercent = 0;
-
-      while (true) {
-        const resultChunk = await reader.read();
-        if (resultChunk.done) break;
-
-        if (token.isCancellationRequested) {
-          return { cancelled: true };
+      let progressValue = 0;
+      const intervalId = setInterval(() => {
+        if (progressValue < 90) {
+          progressValue += 2;
+          progress.report({
+            message: 'Downloading...',
+            increment: 2
+          });
         }
+      }, 250);
 
-        chunks.push(resultChunk.value);
-        receivedBytes += resultChunk.value.length;
-
-        const progressPercent = totalBytes > 0
-          ? Math.min(100, Math.round((receivedBytes / totalBytes) * 100))
-          : 0;
-        const increment = totalBytes > 0 ? progressPercent - lastProgressPercent : 0;
-        lastProgressPercent = progressPercent;
-
-        progress.report({
-          message: totalBytes > 0
-            ? `${Math.round(receivedBytes / 1024)} KB of ${Math.round(totalBytes / 1024)} KB`
-            : `${Math.round(receivedBytes / 1024)} KB downloaded`,
-          increment
-        });
+      try {
+        await sigma.fs.downloadFile(downloadUrl, binaryPath);
+      } finally {
+        clearInterval(intervalId);
       }
 
-      const totalLength = chunks.reduce((sum, chunk) => sum + chunk.length, 0);
-      const merged = new Uint8Array(totalLength);
-      let offset = 0;
-      for (const chunk of chunks) {
-        merged.set(chunk, offset);
-        offset += chunk.length;
+      if (token.isCancellationRequested) {
+        return { cancelled: true };
       }
 
-      await sigma.fs.writeFile(binaryPath, merged);
+      progress.report({
+        message: 'Download complete',
+        increment: 100 - progressValue
+      });
+
       return { cancelled: false };
     }
   );
