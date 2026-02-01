@@ -1,0 +1,62 @@
+{
+  "$schema": "https://raw.githubusercontent.com/aleksey-hoffman/sigma-file-manager/v2/src/modules/extensions/sdk/manifest.schema.json",
+  "id": "sigma.video-downloader",
+  "name": "Video Downloader",
+  "version": "0.1.0",
+  "description": "Download videos using yt-dlp with quality and format options.",
+  "author": {
+    "name": "Aleksey Hoffman",
+    "url": "https://github.com/aleksey-hoffman"
+  },
+  "repository": "https://github.com/sigma-hub/sfm-extension-video-downloader",
+  "license": "MIT",
+  "categories": [
+    "Media"
+  ],
+  "tags": [
+    "video",
+    "yt-dlp",
+    "youtube"
+  ],
+  "type": "api",
+  "main": "index.js",
+  "permissions": [
+    "commands",
+    "notifications",
+    "dialogs",
+    "fs.read",
+    "fs.write",
+    "shell"
+  ],
+  "activationEvents": [
+    "onInstall",
+    "onUninstall",
+    "onStartup",
+    "onUpdate",
+    "onEnable",
+    "onDisable",
+    "onCommand:sigma.video-downloader.download-video"
+  ],
+  "contributes": {
+    "configuration": {
+      "title": "Video Downloader Settings",
+      "properties": {
+        "autoUpdateBinary": {
+          "type": "boolean",
+          "default": true,
+          "description": "Automatically check for and download yt-dlp updates on app startup"
+        }
+      }
+    },
+    "commands": [
+      {
+        "id": "download-video",
+        "title": "Download video from URL",
+        "description": "Download a video using yt-dlp with quality options"
+      }
+    ]
+  },
+  "engines": {
+    "sigmaFileManager": ">=2.0.0"
+  }
+}
