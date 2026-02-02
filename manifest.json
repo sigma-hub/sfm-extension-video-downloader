@@ -2,7 +2,7 @@
   "$schema": "https://raw.githubusercontent.com/aleksey-hoffman/sigma-file-manager/v2/src/modules/extensions/sdk/manifest.schema.json",
   "id": "sigma.video-downloader",
   "name": "Video Downloader",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "author": {
     "name": "Aleksey Hoffman",
     "url": "https://github.com/aleksey-hoffman"
@@ -49,8 +49,8 @@
     "commands": [
       {
         "id": "download-video",
-        "title": "Download video, playlist, audio, or stream from URL",
-        "description": "Download a video, playlist, audio, or stream from YouTube, Twitch, and thousands of other websites with quality options using the open-source tool yt-dlp"
+        "title": "Download from URL",
+        "description": "Download videos, playlists, audio, and streams from YouTube, Twitch, and 1000+ other websites"
       }
     ]
   },

@@ -206,15 +206,15 @@ function buildFormatSelector(options) {
 function createDownloadModal() {
   return new Promise((resolve) => {
     const modal = sigma.ui.createModal({
-      title: 'Download video, playlist, audio, or stream from URL',
+      title: 'Download from URL',
       width: 480,
       content: [
         sigma.ui.input({
           id: 'url',
-          label: 'URL',
-          placeholder: '...or other website URL',
+          label: 'Website URL',
+          placeholder: 'Paste URL here',
         }),
-        sigma.ui.text('Supports YouTube, Twitch, and thousands of other websites'),
+        sigma.ui.text('Supports YouTube, Twitch, and 1000+ other websites'),
         sigma.ui.separator(),
         sigma.ui.select({
           id: 'mode',
