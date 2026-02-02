@@ -2,8 +2,7 @@
   "$schema": "https://raw.githubusercontent.com/aleksey-hoffman/sigma-file-manager/v2/src/modules/extensions/sdk/manifest.schema.json",
   "id": "sigma.video-downloader",
   "name": "Video Downloader",
-  "version": "0.1.7",
-  "description": "Download videos using yt-dlp with quality and format options.",
+  "version": "1.0.0",
   "author": {
     "name": "Aleksey Hoffman",
     "url": "https://github.com/aleksey-hoffman"
@@ -43,15 +42,15 @@
         "autoUpdateBinary": {
           "type": "boolean",
           "default": true,
-          "description": "Automatically check for and download yt-dlp updates on app startup"
+          "description": "Automatically check for and download open-source tool yt-dlp updates on app startup"
         }
       }
     },
     "commands": [
       {
         "id": "download-video",
-        "title": "Download video from URL",
-        "description": "Download a video using yt-dlp with quality options"
+        "title": "Download video, playlist, audio, or stream from URL",
+        "description": "Download a video, playlist, audio, or stream from YouTube, Twitch, and thousands of other websites with quality options using the open-source tool yt-dlp"
       }
     ]
   },

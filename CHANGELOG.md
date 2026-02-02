@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Fixed
+
+- Fall back to user downloads directory when command palette is opened from a page without a current directory (e.g., settings, extensions page)
+
+### Changed
+
+- Refactored to use new Sigma extension APIs:
+  - Use `sigma.ui.createModal()` for declarative modal UI (replaces ~300 lines of manual DOM code)
+  - Use `sigma.binary.ensureInstalled()` for binary management (replaces ~100 lines of download logic)
+  - Use `sigma.platform` for platform detection (replaces manual navigator checks)
+- Simplified codebase with cleaner, more maintainable code
+
+### Added
+
+- Dynamic download modal that adapts to different platforms:
+  - YouTube: Video/audio mode selector, video quality, audio quality
+  - Twitch Live: Stream quality, "Start from beginning" option
+  - Twitch VOD/Clips: Video quality selector
+  - Generic sites: Simple quality selector with helpful hint
+- Platform auto-detection from URL with visual badge indicator
+- Live stream specific UI with "Start Recording" button text
+- Twitch-specific yt-dlp flags (--live-from-start, --concurrent-fragments)
+
 ## [0.1.7] - 2026-02-01
 
 ### Changed
