@@ -236,7 +236,7 @@ function createDownloadModal() {
         }),
         sigma.ui.checkbox({
           id: 'liveFromStart',
-          label: 'Start from beginning (for live streams)',
+          label: 'Record live stream from beginning (YouTube/Twitch only, experimental)',
           checked: false,
         }),
       ],
@@ -281,7 +281,7 @@ async function runYtDlp(binaryPath, options) {
   const formatSelector = buildFormatSelector(options);
   const args = ['--no-playlist', '--newline', '-f', formatSelector];
 
-  if (options.platform === 'twitch-live' && options.liveFromStart) {
+  if (options.liveFromStart && (options.platform === 'twitch-live' || options.platform === 'youtube')) {
     args.push('--live-from-start');
   }
 
