@@ -1,3 +1,4 @@
+// @ts-check
 const YTDLP_BINARY_ID = 'yt-dlp';
 
 function sleep(ms) {
