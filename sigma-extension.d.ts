@@ -45,9 +45,24 @@ export type ExtensionActivationEvent
     | 'onUpdate'
     | `onCommand:${string}`;
 
-export interface ExtensionAuthor {
+export interface ExtensionPublisher {
   name: string;
   url?: string;
+}
+
+export type ExtensionCommandArgumentType = 'text' | 'password' | 'dropdown';
+
+export interface ExtensionCommandArgumentDropdownOption {
+  title: string;
+  value: string;
+}
+
+export interface ExtensionCommandArgument {
+  name: string;
+  type: ExtensionCommandArgumentType;
+  placeholder: string;
+  required?: boolean;
+  data?: ExtensionCommandArgumentDropdownOption[];
 }
 
 export interface ExtensionCommand {
@@ -56,6 +71,7 @@ export interface ExtensionCommand {
   description?: string;
   icon?: string;
   shortcut?: string;
+  arguments?: ExtensionCommandArgument[];
 }
 
 export interface ExtensionContextMenuItem {
@@ -149,7 +165,7 @@ export interface ExtensionManifest {
   name: string;
   previousName?: string;
   version: string;
-  author?: ExtensionAuthor;
+  publisher?: ExtensionPublisher;
   repository: string;
   license: string;
   icon?: string;
@@ -161,6 +177,7 @@ export interface ExtensionManifest {
   permissions: ExtensionPermission[];
   activationEvents?: ExtensionActivationEvent[];
   contributes?: ExtensionContributions;
+  platforms?: PlatformOS[];
   engines: ExtensionEngines;
 }
 

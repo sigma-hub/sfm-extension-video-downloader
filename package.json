@@ -2,10 +2,10 @@
   "$schema": "https://raw.githubusercontent.com/aleksey-hoffman/sigma-file-manager/v2/src/modules/extensions/sdk/manifest.schema.json",
   "id": "sigma.video-downloader",
   "name": "Video Downloader",
-  "version": "1.0.2",
-  "author": {
-    "name": "Aleksey Hoffman",
-    "url": "https://github.com/aleksey-hoffman"
+  "version": "1.0.3",
+  "publisher": {
+    "name": "sigma-hub",
+    "url": "https://github.com/sigma-hub"
   },
   "repository": "https://github.com/sigma-hub/sfm-extension-video-downloader",
   "license": "MIT",
@@ -17,6 +17,7 @@
     "yt-dlp",
     "youtube"
   ],
+  "platforms": ["windows", "macos", "linux"],
   "type": "api",
   "main": "index.js",
   "permissions": [
@@ -50,7 +51,15 @@
       {
         "id": "download-video",
         "title": "Download from URL",
-        "description": "Download videos, playlists, audio, and streams from YouTube, Twitch, and 1000+ other websites"
+        "description": "Download videos, playlists, audio, and streams from YouTube, Twitch, and 1000+ other websites",
+        "arguments": [
+          {
+            "name": "url",
+            "type": "text",
+            "placeholder": "Paste URL here (YouTube, Twitch, etc.)",
+            "required": true
+          }
+        ]
       }
     ]
   },

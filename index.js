@@ -1,14 +1,163 @@
 // @ts-check
 const YTDLP_BINARY_ID = 'yt-dlp';
+const DENO_BINARY_ID = 'deno';
+const FFMPEG_BINARY_ID = 'ffmpeg';
+let cachedDenoBinaryPath = null;
+let cachedFfmpegBinaryPath = null;
+let cachedFfprobeBinaryPath = null;
 
 function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
+function getDenoDownloadUrl(platform) {
+  const arch = sigma.platform.arch;
+  if (platform === 'windows') {
+    return 'https://github.com/denoland/deno/releases/latest/download/deno-x86_64-pc-windows-msvc.zip';
+  }
+  if (platform === 'macos') {
+    if (arch === 'arm64') {
+      return 'https://github.com/denoland/deno/releases/latest/download/deno-aarch64-apple-darwin.zip';
+    }
+    return 'https://github.com/denoland/deno/releases/latest/download/deno-x86_64-apple-darwin.zip';
+  }
+  if (arch === 'arm64') {
+    return 'https://github.com/denoland/deno/releases/latest/download/deno-aarch64-unknown-linux-gnu.zip';
+  }
+  return 'https://github.com/denoland/deno/releases/latest/download/deno-x86_64-unknown-linux-gnu.zip';
+}
+
+function getFfmpegDownloadUrl(platform) {
+  const arch = sigma.platform.arch;
+  if (platform !== 'windows') {
+    return null;
+  }
+  if (arch === 'arm64') {
+    return 'https://github.com/yt-dlp/FFmpeg-Builds/releases/latest/download/ffmpeg-master-latest-winarm64-gpl.zip';
+  }
+  if (arch === 'x86') {
+    return 'https://github.com/yt-dlp/FFmpeg-Builds/releases/latest/download/ffmpeg-master-latest-win32-gpl.zip';
+  }
+  return 'https://github.com/yt-dlp/FFmpeg-Builds/releases/latest/download/ffmpeg-master-latest-win64-gpl.zip';
+}
+
+function getFfmpegExecutable() {
+  if (sigma.platform.isWindows) {
+    return 'bin/ffmpeg.exe';
+  }
+  return 'ffmpeg';
+}
+
+function getFfprobeExecutable() {
+  if (sigma.platform.isWindows) {
+    return 'bin/ffprobe.exe';
+  }
+  return 'ffprobe';
+}
+
+function getDirectoryFromPath(binaryPath) {
+  if (!binaryPath) return null;
+  const separator = sigma.platform.pathSeparator;
+  const lastSeparatorIndex = binaryPath.lastIndexOf(separator);
+  if (lastSeparatorIndex === -1) return null;
+  return binaryPath.substring(0, lastSeparatorIndex);
+}
+
+function normalizePathForComparison(pathValue) {
+  if (!pathValue) return '';
+  const normalized = pathValue.replace(/[\\/]+/g, sigma.platform.pathSeparator);
+  return sigma.platform.isWindows ? normalized.toLowerCase() : normalized;
+}
+
+function isPathWithinPath(pathValue, rootPath) {
+  if (!pathValue || !rootPath) return false;
+  const normalizedPath = normalizePathForComparison(pathValue);
+  const normalizedRoot = normalizePathForComparison(rootPath);
+  return normalizedPath === normalizedRoot
+    || normalizedPath.startsWith(`${normalizedRoot}${sigma.platform.pathSeparator}`);
+}
+
+function getDenoDirectory() {
+  if (!cachedDenoBinaryPath) return null;
+  const separator = sigma.platform.pathSeparator;
+  const lastSep = cachedDenoBinaryPath.lastIndexOf(separator);
+  if (lastSep === -1) return null;
+  return cachedDenoBinaryPath.substring(0, lastSep);
+}
+
+async function ensureDenoInstalled() {
+  if (cachedDenoBinaryPath) return cachedDenoBinaryPath;
+
+  try {
+    const denoPath = await sigma.binary.ensureInstalled(DENO_BINARY_ID, {
+      name: 'deno',
+      downloadUrl: getDenoDownloadUrl,
+    });
+    cachedDenoBinaryPath = denoPath;
+    console.log('[Video Downloader] Deno available at:', denoPath);
+    return denoPath;
+  } catch (error) {
+    console.error('[Video Downloader] Failed to ensure Deno installed:', error);
+    return null;
+  }
+}
+
+async function ensureFfmpegInstalled() {
+  if (cachedFfmpegBinaryPath) return cachedFfmpegBinaryPath;
+
+  const ffmpegDownloadUrl = getFfmpegDownloadUrl(sigma.platform.os);
+  if (!ffmpegDownloadUrl) {
+    return null;
+  }
+
+  try {
+    const ffmpegPath = await sigma.binary.ensureInstalled(FFMPEG_BINARY_ID, {
+      name: 'ffmpeg',
+      executable: getFfmpegExecutable(),
+      downloadUrl: ffmpegDownloadUrl,
+    });
+    cachedFfmpegBinaryPath = ffmpegPath;
+    cachedFfprobeBinaryPath = ffmpegPath.replace(/ffmpeg(\.exe)?$/i, `ffprobe${sigma.platform.isWindows ? '.exe' : ''}`);
+    console.log('[Video Downloader] ffmpeg available at:', ffmpegPath);
+    if (cachedFfprobeBinaryPath) {
+      console.log('[Video Downloader] ffprobe expected at:', cachedFfprobeBinaryPath);
+    }
+    return ffmpegPath;
+  } catch (error) {
+    console.error('[Video Downloader] Failed to ensure ffmpeg installed:', error);
+    return null;
+  }
+}
+
+async function ensureToolchainReady() {
+  const denoPath = await ensureDenoInstalled();
+  if (!denoPath) {
+    throw new Error('Failed to install Deno runtime');
+  }
+
+  const ffmpegPath = await ensureFfmpegInstalled();
+  if (sigma.platform.isWindows && !ffmpegPath) {
+    throw new Error('Failed to install ffmpeg binary');
+  }
+
+  if (sigma.platform.isWindows) {
+    const ffprobePath = cachedFfprobeBinaryPath
+      || (ffmpegPath ? ffmpegPath.replace(/ffmpeg(\.exe)?$/i, `ffprobe${sigma.platform.isWindows ? '.exe' : ''}`) : null);
+    if (!ffprobePath) {
+      throw new Error('ffprobe path could not be resolved');
+    }
+
+    const ffprobeExists = await sigma.fs.exists(ffprobePath);
+    if (!ffprobeExists) {
+      throw new Error('ffprobe binary is missing from the ffmpeg package');
+    }
+  }
+}
+
 async function renamePartFilesToTs(directory) {
   try {
     console.log('[Video Downloader] Calling shell.renamePartFilesToTs for:', directory);
-    const renamedCount = await sigma.shell.renamePartFilesToTs(directory);
+    const renamedCount = await sigma.shell['renamePartFilesToTs'](directory);
     console.log('[Video Downloader] Renamed', renamedCount, 'files to .ts');
   } catch (err) {
     console.warn('[Video Downloader] Failed to rename .part files:', err);
@@ -153,26 +302,55 @@ function getPlatformLabel(platform) {
   }
 }
 
+const YTDLP_MAX_AGE_MS = 3 * 24 * 60 * 60 * 1000;
+
 function getYtDlpDownloadUrl(platform) {
   if (platform === 'windows') {
-    return 'https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe';
+    return 'https://github.com/yt-dlp/yt-dlp-nightly-builds/releases/latest/download/yt-dlp.exe';
   }
   if (platform === 'macos') {
-    return 'https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_macos';
+    return 'https://github.com/yt-dlp/yt-dlp-nightly-builds/releases/latest/download/yt-dlp_macos';
   }
   if (platform === 'linux' && sigma.platform.arch === 'arm64') {
-    return 'https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_linux_aarch64';
+    return 'https://github.com/yt-dlp/yt-dlp-nightly-builds/releases/latest/download/yt-dlp_linux_aarch64';
   }
-  return 'https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_linux';
+  return 'https://github.com/yt-dlp/yt-dlp-nightly-builds/releases/latest/download/yt-dlp_linux';
 }
 
 async function ensureBinaryInstalled() {
+  try {
+    const binaryInfo = await sigma.binary.getInfo(YTDLP_BINARY_ID);
+    const currentChannel = await sigma.storage.get('ytdlp-channel');
+    const needsChannelSwitch = binaryInfo && currentChannel !== 'nightly';
+    const isStale = binaryInfo && (Date.now() - binaryInfo.installedAt) > YTDLP_MAX_AGE_MS;
+
+    if (needsChannelSwitch || isStale) {
+      const reason = needsChannelSwitch ? 'switching to nightly channel' : 'older than 3 days';
+      console.log(`[Video Downloader] Removing yt-dlp (${reason})`);
+      await sigma.binary.remove(YTDLP_BINARY_ID);
+    }
+  } catch (error) {
+    console.warn('[Video Downloader] Failed to check/remove old yt-dlp:', error);
+  }
+
   const binaryPath = await sigma.binary.ensureInstalled(YTDLP_BINARY_ID, {
     name: 'yt-dlp',
     downloadUrl: getYtDlpDownloadUrl,
   });
 
+  await sigma.storage.set('ytdlp-channel', 'nightly');
+
   return { binaryPath };
+}
+
+function extractErrorFromStderr(stderr) {
+  if (!stderr) return '';
+  const lines = stderr.split('\n').filter(line => line.trim());
+  const errorLines = lines.filter(line => {
+    const trimmed = line.trim();
+    return !trimmed.startsWith('WARNING:') && !trimmed.startsWith('NOTE:');
+  });
+  return errorLines.join('\n');
 }
 
 function buildFormatSelector(options) {
@@ -204,7 +382,91 @@ function buildFormatSelector(options) {
   return `bestvideo[height<=${videoQuality}]+bestaudio/best`;
 }
 
-function createDownloadModal() {
+function buildYtDlpArgs(options, formatSelector, extraArgs = []) {
+  const args = [
+    '--no-playlist',
+    '--newline',
+    '--remote-components',
+    'ejs:npm',
+    '--remote-components',
+    'ejs:github',
+    '-f',
+    formatSelector,
+  ];
+
+  if (options.liveFromStart && (options.platform === 'twitch-live' || options.platform === 'youtube')) {
+    args.push('--live-from-start');
+  }
+
+  if (options.platform === 'twitch-live' || options.platform === 'twitch-vod') {
+    args.push('--concurrent-fragments', '4');
+  }
+
+  if (options.mode === 'audio-only') {
+    args.push('-x', '--audio-format', 'mp3');
+  }
+
+  if (options.outputDir) {
+    args.push('-P', options.outputDir);
+    args.push('-o', '%(title)s.%(ext)s');
+  }
+
+  if (options.ffmpegPath) {
+    args.push('--ffmpeg-location', options.ffmpegPath);
+  } else if (options.ffmpegDir) {
+    args.push('--ffmpeg-location', options.ffmpegDir);
+  }
+
+  if (extraArgs.length > 0) {
+    args.push(...extraArgs);
+  }
+
+  args.push(options.url);
+  return args;
+}
+
+function shouldRetryWithBrowserCookies(options, outputText) {
+  if (options.platform !== 'youtube') return false;
+  const lowerOutput = outputText.toLowerCase();
+  return (
+    lowerOutput.includes('no title found in player responses')
+    || lowerOutput.includes('login_required')
+    || lowerOutput.includes('sign in to confirm')
+  );
+}
+
+function isChromeCookieCopyFailure(outputText) {
+  const lowerOutput = outputText.toLowerCase();
+  return (
+    lowerOutput.includes('could not copy chrome cookie database')
+    || lowerOutput.includes('could not copy edge cookie database')
+    || lowerOutput.includes('could not copy chromium cookie database')
+  );
+}
+
+function getCookieBrowserCandidates() {
+  if (sigma.platform.isWindows) {
+    return ['firefox', 'edge', 'chrome'];
+  }
+  if (sigma.platform.isMacos) {
+    return ['chrome', 'safari', 'firefox'];
+  }
+  return ['chrome', 'chromium', 'firefox'];
+}
+
+function getPluginDirFromBinaryPath(binaryPath) {
+  const separator = sigma.platform.pathSeparator;
+  const marker = `${separator}bin${separator}${YTDLP_BINARY_ID}${separator}`;
+  const markerIndex = binaryPath.lastIndexOf(marker);
+  if (markerIndex === -1) return null;
+  return binaryPath.substring(0, markerIndex);
+}
+
+function isChromiumBrowserName(browserName) {
+  return browserName === 'chrome' || browserName === 'edge' || browserName === 'chromium';
+}
+
+function createDownloadModal(prefilledUrl) {
   return new Promise((resolve) => {
     const modal = sigma.ui.createModal({
       title: 'Download from URL',
@@ -214,6 +476,7 @@ function createDownloadModal() {
           id: 'url',
           label: 'Website URL',
           placeholder: 'Paste URL here',
+          value: prefilledUrl || '',
         }),
         sigma.ui.text('Supports YouTube, Twitch, and 1000+ other websites'),
         sigma.ui.separator(),
@@ -253,7 +516,7 @@ function createDownloadModal() {
         return;
       }
 
-      const url = values.url;
+      const url = typeof values.url === 'string' ? values.url : '';
       if (!url || !url.trim()) {
         resolve(null);
         return;
@@ -280,26 +543,18 @@ function createDownloadModal() {
 
 async function runYtDlp(binaryPath, options) {
   const formatSelector = buildFormatSelector(options);
-  const args = ['--no-playlist', '--newline', '-f', formatSelector];
+  await ensureToolchainReady();
+  const ffmpegPath = await ensureFfmpegInstalled();
+  const ffmpegDir = getDirectoryFromPath(ffmpegPath);
+  console.log('[Video Downloader] Using ffmpeg path:', ffmpegPath);
+  const ytDlpOptions = {
+    ...options,
+    ffmpegPath,
+    ffmpegDir,
+  };
+  const defaultArgs = buildYtDlpArgs(ytDlpOptions, formatSelector);
 
-  if (options.liveFromStart && (options.platform === 'twitch-live' || options.platform === 'youtube')) {
-    args.push('--live-from-start');
-  }
-
-  if (options.platform === 'twitch-live' || options.platform === 'twitch-vod') {
-    args.push('--concurrent-fragments', '4');
-  }
-
-  if (options.mode === 'audio-only') {
-    args.push('-x', '--audio-format', 'mp3');
-  }
-
-  if (options.outputDir) {
-    args.push('-P', options.outputDir);
-    args.push('-o', '%(title)s.%(ext)s');
-  }
-
-  args.push(options.url);
+  console.log('[Video Downloader] Running yt-dlp with args:', JSON.stringify(defaultArgs));
 
   let lastPercent = 0;
   let lastUpdateTime = 0;
@@ -307,6 +562,7 @@ async function runYtDlp(binaryPath, options) {
   let isLiveStream = false;
   let streamDetected = false;
   let isCancelled = false;
+  let activeCancelCommand = null;
   const UPDATE_INTERVAL = 200;
 
   function throttledUpdate(message, increment) {
@@ -341,11 +597,8 @@ async function runYtDlp(binaryPath, options) {
     }
   }
 
-  const { result, cancel } = await sigma.shell.runWithProgress(
-    binaryPath,
-    args,
-    (payload) => {
-      const line = payload.line.trim();
+  const handleProgressLine = (payload) => {
+      const line = String(payload.line || '').trim();
       if (!line) return;
 
       if (!streamDetected && (line.includes('(live)') || line.includes('Duration: N/A'))) {
@@ -398,8 +651,18 @@ async function runYtDlp(binaryPath, options) {
       ) {
         throttledUpdate(formatStatusMessage(line), 0);
       }
-    }
-  );
+  };
+
+  async function runYtDlpAttempt(attemptArgs, attemptLabel) {
+    console.log('[Video Downloader] Running yt-dlp attempt:', attemptLabel, JSON.stringify(attemptArgs));
+    const commandTask = await sigma.shell.runWithProgress(
+      binaryPath,
+      attemptArgs,
+      handleProgressLine
+    );
+    activeCancelCommand = commandTask.cancel;
+    return commandTask.result;
+  }
 
   if (options.onCancel) {
     options.onCancel(async () => {
@@ -407,10 +670,14 @@ async function runYtDlp(binaryPath, options) {
       console.log('[Video Downloader] isLiveStream:', isLiveStream, 'outputDir:', options.outputDir);
       cancelUpdates();
       try {
-        await cancel();
-        console.log('[Video Downloader] cancel() completed successfully');
-      } catch (err) {
-        console.error('[Video Downloader] cancel() failed:', err);
+        if (activeCancelCommand) {
+          await activeCancelCommand();
+          console.log('[Video Downloader] cancel() completed successfully');
+        } else {
+          console.warn('[Video Downloader] cancel() skipped, no active command');
+        }
+      } catch (cancelError) {
+        console.error('[Video Downloader] cancel() failed:', cancelError);
       }
       
       if (options.outputDir) {
@@ -420,19 +687,103 @@ async function runYtDlp(binaryPath, options) {
     });
   }
 
-  const commandResult = await result;
+  let commandResult = await runYtDlpAttempt(defaultArgs, 'default');
 
   if (commandResult.code !== 0 && !isCancelled) {
-    sigma.ui.showNotification({
-      title: 'Download failed',
-      message: commandResult.stderr || 'yt-dlp exited with an error.',
-      type: 'error'
-    });
+    const fullOutput = (commandResult.stderr || '') + '\n' + (commandResult.stdout || '');
+    if (shouldRetryWithBrowserCookies(options, fullOutput)) {
+      const extractorRetryArgs = buildYtDlpArgs(ytDlpOptions, formatSelector, [
+        '--extractor-args',
+        'youtube:player_client=tv,ios,web',
+      ]);
+      throttledUpdate('Retrying with alternate YouTube clients...', 0);
+      const extractorRetryResult = await runYtDlpAttempt(extractorRetryArgs, 'youtube-client-fallback');
+      commandResult = extractorRetryResult;
+
+      if (extractorRetryResult.code === 0) {
+        return;
+      }
+
+      const browserCandidates = getCookieBrowserCandidates();
+      let lastNonCookieCopyErrorResult = commandResult;
+      for (const browserName of browserCandidates) {
+        if (isCancelled) break;
+        throttledUpdate(`Retrying with ${browserName} cookies...`, 0);
+        const retryExtraArgs = [
+          '--cookies-from-browser',
+          browserName,
+        ];
+
+        if (sigma.platform.isWindows && isChromiumBrowserName(browserName)) {
+          const pluginDir = getPluginDirFromBinaryPath(binaryPath);
+          if (pluginDir) {
+            retryExtraArgs.unshift('--plugin-dirs', pluginDir);
+          }
+        }
+
+        const retryArgs = buildYtDlpArgs(ytDlpOptions, formatSelector, retryExtraArgs);
+        const retryResult = await runYtDlpAttempt(retryArgs, `cookies:${browserName}`);
+        commandResult = retryResult;
+        const retryOutputText = (retryResult.stderr || '') + '\n' + (retryResult.stdout || '');
+        if (!isChromeCookieCopyFailure(retryOutputText)) {
+          lastNonCookieCopyErrorResult = retryResult;
+        }
+        if (retryResult.code === 0) {
+          break;
+        }
+      }
+
+      if (commandResult.code !== 0) {
+        const finalOutputText = (commandResult.stderr || '') + '\n' + (commandResult.stdout || '');
+        if (isChromeCookieCopyFailure(finalOutputText) && lastNonCookieCopyErrorResult) {
+          commandResult = lastNonCookieCopyErrorResult;
+        }
+      }
+    }
+  }
+
+  if (commandResult.code !== 0 && !isCancelled) {
+    const stderrText = commandResult.stderr || '';
+    const stdoutText = commandResult.stdout || '';
+    const fullOutput = stderrText + '\n' + stdoutText;
+    const needsJsRuntime = fullOutput.includes('No supported JavaScript runtime');
+    const needsLogin = fullOutput.includes('LOGIN_REQUIRED') || fullOutput.includes('Sign in to confirm');
+    const errorMessage = extractErrorFromStderr(stderrText);
+
+    console.error('[Video Downloader] yt-dlp failed with code:', commandResult.code);
+    console.error('[Video Downloader] stderr:', stderrText);
+    console.error('[Video Downloader] stdout:', stdoutText);
+
+    if (needsLogin) {
+      sigma.ui.showNotification({
+        title: 'Download failed',
+        message: 'This video requires YouTube login. Try a different video, or use yt-dlp with --cookies-from-browser option from the terminal.',
+        type: 'error'
+      });
+    } else if (isChromeCookieCopyFailure(fullOutput)) {
+      sigma.ui.showNotification({
+        title: 'Download failed',
+        message: 'Could not access Chromium cookies. Close Chrome/Edge and retry, or use Firefox cookies.',
+        type: 'error'
+      });
+    } else if (needsJsRuntime) {
+      sigma.ui.showNotification({
+        title: 'Download failed',
+        message: 'YouTube requires a JavaScript runtime (Deno). Try reinstalling the extension.',
+        type: 'error'
+      });
+    } else {
+      sigma.ui.showNotification({
+        title: 'Download failed',
+        message: errorMessage || 'yt-dlp exited with an error. Try updating yt-dlp by reinstalling the extension.',
+        type: 'error'
+      });
+    }
   }
 }
 
-async function handleDownloadCommand() {
-  const modalResult = await createDownloadModal();
+async function handleDownloadCommand(prefilledUrl) {
+  const modalResult = await createDownloadModal(prefilledUrl);
 
   if (!modalResult || !modalResult.url) {
     return;
@@ -454,6 +805,26 @@ async function handleDownloadCommand() {
   }
 
   const installResult = await ensureBinaryInstalled();
+  await ensureToolchainReady();
+
+  const ytDlpBinaryDir = getDirectoryFromPath(installResult.binaryPath);
+  if (outputDir && ytDlpBinaryDir && isPathWithinPath(outputDir, ytDlpBinaryDir)) {
+    try {
+      outputDir = await sigma.context.getDownloadsDir();
+      sigma.ui.showNotification({
+        title: 'Video Downloader',
+        message: 'Download location was reset to Downloads to avoid writing into extension binaries.',
+        type: 'info',
+      });
+    } catch (error) {
+      sigma.ui.showNotification({
+        title: 'Video Downloader',
+        message: 'Could not resolve a safe download location. Please choose a folder in the file browser and retry.',
+        type: 'error'
+      });
+      return;
+    }
+  }
 
   let isLiveStream = modalResult.platform === 'twitch-live';
 
@@ -519,29 +890,45 @@ async function handleDownloadCommand() {
   }
 }
 
+let startupActivationPromise = null;
+
 async function handleStartupActivation() {
+  if (startupActivationPromise) return startupActivationPromise;
+  startupActivationPromise = performStartupActivation();
+  return startupActivationPromise;
+}
+
+async function performStartupActivation() {
   const autoUpdate = (await sigma.settings.get('autoUpdateBinary')) !== false;
   if (!autoUpdate) return;
 
   try {
     await ensureBinaryInstalled();
   } catch (error) {
-    console.warn('[Video Downloader] Failed to ensure binary installed:', error);
+    console.warn('[Video Downloader] Failed to ensure yt-dlp installed:', error);
+  }
+
+  try {
+    await ensureDenoInstalled();
+  } catch (error) {
+    console.warn('[Video Downloader] Failed to ensure Deno installed:', error);
+  }
+
+  try {
+    await ensureFfmpegInstalled();
+  } catch (error) {
+    console.warn('[Video Downloader] Failed to ensure ffmpeg installed:', error);
   }
 }
 
 async function handleInstallActivation() {
   try {
     await ensureBinaryInstalled();
-    sigma.ui.showNotification({
-      title: 'Video Downloader',
-      message: 'yt-dlp is ready',
-      type: 'success'
-    });
+    await ensureToolchainReady();
   } catch (error) {
     sigma.ui.showNotification({
       title: 'Video Downloader',
-      message: error.message || 'Failed to download yt-dlp',
+      message: error.message || 'Failed to set up Video Downloader',
       type: 'error'
     });
   }
@@ -551,14 +938,45 @@ async function handleUninstallActivation() {
   try {
     await sigma.binary.remove(YTDLP_BINARY_ID);
   } catch (error) {
-    console.warn('[Video Downloader] Failed to remove binary:', error);
+    console.warn('[Video Downloader] Failed to remove yt-dlp:', error);
   }
+
+  try {
+    await sigma.binary.remove(DENO_BINARY_ID);
+  } catch (error) {
+    console.warn('[Video Downloader] Failed to remove Deno:', error);
+  }
+
+  try {
+    await sigma.binary.remove(FFMPEG_BINARY_ID);
+  } catch (error) {
+    console.warn('[Video Downloader] Failed to remove ffmpeg:', error);
+  }
+
+  cachedDenoBinaryPath = null;
+  cachedFfmpegBinaryPath = null;
+  cachedFfprobeBinaryPath = null;
 }
 
 async function activate(context) {
   sigma.commands.registerCommand(
-    { id: 'download-video', title: 'Download video, playlist, audio, or stream from URL' },
-    async () => handleDownloadCommand()
+    {
+      id: 'download-video',
+      title: 'Download video, playlist, audio, or stream from URL',
+      arguments: [
+        {
+          name: 'url',
+          type: 'text',
+          placeholder: 'Paste URL here (YouTube, Twitch, etc.)',
+          required: true,
+        },
+      ],
+    },
+    async (args) => {
+      const providedArgs = args && typeof args === 'object' ? args : {};
+      const urlFromArgs = typeof providedArgs.url === 'string' ? providedArgs.url.trim() : '';
+      return handleDownloadCommand(urlFromArgs || undefined);
+    }
   );
 
   if (context.activationEvent === 'onInstall') {
