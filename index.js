@@ -4,6 +4,10 @@
  * @typedef {import('@sigma-file-manager/api').ExtensionActivationContext} ExtensionActivationContext
  */
 
+function getT() {
+  return (key, params) => sigma?.i18n?.extensionT?.(key, params) ?? key;
+}
+
 const YTDLP_BINARY_ID = 'yt-dlp';
 const DENO_BINARY_ID = 'deno';
 const FFMPEG_BINARY_ID = 'ffmpeg';
@@ -380,7 +384,7 @@ function formatStreamProgressMessage(info) {
     parts.push(info.bitrate);
   }
 
-  return parts.length > 0 ? parts.join(' • ') : 'Recording stream...';
+  return parts.length > 0 ? parts.join(' • ') : (getT()('recordingStream') || 'Recording stream...');
 }
 
 function formatStatusMessage(line) {
@@ -424,27 +428,28 @@ function getPreviewErrorState(url, rawError, hasSavedCookies) {
   const platform = detectPlatform(url);
   const normalizedError = normalizePreviewErrorMessage(rawError);
 
+  const t = getT();
   if (platform === 'youtube' && isYouTubePreviewAuthError(normalizedError)) {
     return {
       statusElements: buildPreviewNoticeElements({
-        title: 'Preview unavailable',
+        title: t('previewUnavailable'),
         description: hasSavedCookies
-          ? 'Saved YouTube cookies did not unlock this video.'
-          : 'YouTube needs cookies to load the title and thumbnail.',
+          ? t('savedCookiesDidNotUnlock')
+          : t('youtubeNeedsCookies'),
         detail: hasSavedCookies
-          ? 'Replace your cookies and try again.'
-          : 'Click the button below to set up YouTube cookies.',
+          ? t('replaceCookiesAndRetry')
+          : t('setupYoutubeCookiesButton'),
       }),
       needsCookieSetup: true,
-      cookieButtonLabel: hasSavedCookies ? 'Replace YouTube cookies' : 'Setup YouTube cookies',
+      cookieButtonLabel: hasSavedCookies ? t('replaceYoutubeCookies') : t('setupYoutubeCookiesLabel'),
     };
   }
 
   return {
     statusElements: buildPreviewNoticeElements({
-      title: 'Could not load preview',
-      description: 'The URL may be invalid, temporarily unavailable, or blocked by the website.',
-      detail: normalizedError ? 'You can try a different URL or retry in a moment.' : '',
+      title: t('couldNotLoadPreview'),
+      description: t('urlInvalidOrUnavailable'),
+      detail: normalizedError ? t('tryDifferentUrlOrRetry') : '',
     }),
     needsCookieSetup: false,
     cookieButtonLabel: 'Setup YouTube cookies',
@@ -721,6 +726,7 @@ async function ensureCookieUnlockPlugin() {
 }
 
 async function showCookieSetupModal() {
+  const t = getT();
   const existingCookiesPath = await getSavedCookiesPath();
   const hasSavedCookies = Boolean(existingCookiesPath);
 
@@ -748,18 +754,18 @@ async function showCookieSetupModal() {
       buttons: [
         {
           id: 'select',
-          label: hasSavedCookies ? 'Replace stored cookies' : 'Import cookies.txt file',
+          label: hasSavedCookies ? t('replaceYoutubeCookies') : 'Import cookies.txt file',
           variant: 'primary',
           shortcut: { key: 'Enter' }
         },
-        ...(hasSavedCookies ? [{ id: 'clear', label: 'Clear stored cookies', variant: 'danger' }] : []),
+        ...(hasSavedCookies ? [{ id: 'clear', label: t('clearStoredCookies'), variant: 'danger' }] : []),
       ],
     });
 
     modal.onSubmit(async (_values, buttonId) => {
       if (buttonId === 'select') {
         const selectedFile = await sigma.dialog.openFile({
-          title: 'Select cookies.txt file',
+          title: t('selectCookiesFile'),
           filters: [{ name: 'Cookie files', extensions: ['txt'] }],
         });
         const filePath = Array.isArray(selectedFile) ? selectedFile[0] : selectedFile;
@@ -771,7 +777,7 @@ async function showCookieSetupModal() {
         try {
           const managedPath = await importCookiesFile(filePath);
           sigma.ui.showNotification({
-            title: 'Video Downloader',
+            title: t('extensionTitle'),
             subtitle: 'YouTube cookies imported. You can now delete the exported cookies.txt file you selected.',
             type: 'success',
           });
@@ -1666,12 +1672,15 @@ async function handleUninstallActivation() {
  * @param {ExtensionActivationContext} context
  */
 async function activate(context) {
+  await sigma.i18n.mergeFromPath('locales');
+
   cachedExtensionStoragePath = context?.storagePath || null;
 
+  const t = getT();
   sigma.commands.registerCommand(
     {
       id: 'download-video',
-      title: 'Download from URL',
+      title: t('downloadFromUrl'),
     },
     async () => {
       return handleDownloadCommand();
@@ -1681,7 +1690,7 @@ async function activate(context) {
   sigma.commands.registerCommand(
     {
       id: 'setup-youtube-cookies',
-      title: 'Setup YouTube cookies',
+      title: t('setupYoutubeCookies'),
     },
     async () => {
       return showCookieSetupModal();
