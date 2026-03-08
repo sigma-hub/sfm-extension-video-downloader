@@ -1,4 +1,9 @@
 // @ts-check
+
+/**
+ * @typedef {import('@sigma-file-manager/api').ExtensionActivationContext} ExtensionActivationContext
+ */
+
 const YTDLP_BINARY_ID = 'yt-dlp';
 const DENO_BINARY_ID = 'deno';
 const FFMPEG_BINARY_ID = 'ffmpeg';
@@ -284,7 +289,7 @@ async function ensureToolchainReady() {
 async function renamePartFilesToTs(directory) {
   try {
     console.log('[Video Downloader] Calling shell.renamePartFilesToTs for:', directory);
-    const renamedCount = await sigma.shell['renamePartFilesToTs'](directory);
+    const renamedCount = await sigma.shell.renamePartFilesToTs(directory);
     console.log('[Video Downloader] Renamed', renamedCount, 'files to .ts');
   } catch (err) {
     console.warn('[Video Downloader] Failed to rename .part files:', err);
@@ -1657,6 +1662,9 @@ async function handleUninstallActivation() {
   cachedWrapperPath = null;
 }
 
+/**
+ * @param {ExtensionActivationContext} context
+ */
 async function activate(context) {
   cachedExtensionStoragePath = context?.storagePath || null;
 

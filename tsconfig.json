@@ -5,9 +5,7 @@
     "moduleResolution": "Bundler",
     "checkJs": true,
     "allowJs": true,
-    "noEmit": true,
-    "typeRoots": ["./", "./node_modules/@types"],
-    "types": ["sigma-extension"]
+    "noEmit": true
   },
-  "include": ["index.js", "sigma-extension.d.ts"]
+  "include": ["index.js"]
 }
