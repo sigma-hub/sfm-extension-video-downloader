@@ -2,7 +2,7 @@
   "$schema": "https://raw.githubusercontent.com/aleksey-hoffman/sigma-file-manager/v2/src/modules/extensions/sdk/manifest.schema.json",
   "id": "sigma.video-downloader",
   "name": "Video Downloader",
-  "version": "1.0.3",
+  "version": "1.0.6",
   "publisher": {
     "name": "sigma-hub",
     "url": "https://github.com/sigma-hub"
@@ -17,12 +17,18 @@
     "yt-dlp",
     "youtube"
   ],
-  "platforms": ["windows", "macos", "linux"],
-  "type": "api",
+  "platforms": [
+    "windows",
+    "macos",
+    "linux"
+  ],
+  "extensionType": "api",
   "main": "index.js",
+  "icon": "icon.png",
   "permissions": [
     "commands",
     "notifications",
+    "dialogs",
     "fs.read",
     "fs.write",
     "shell"
@@ -34,7 +40,8 @@
     "onUpdate",
     "onEnable",
     "onDisable",
-    "onCommand:sigma.video-downloader.download-video"
+    "onCommand:sigma.video-downloader.download-video",
+    "onCommand:sigma.video-downloader.setup-youtube-cookies"
   ],
   "contributes": {
     "configuration": {
@@ -51,15 +58,12 @@
       {
         "id": "download-video",
         "title": "Download from URL",
-        "description": "Download videos, playlists, audio, and streams from YouTube, Twitch, and 1000+ other websites",
-        "arguments": [
-          {
-            "name": "url",
-            "type": "text",
-            "placeholder": "Paste URL here (YouTube, Twitch, etc.)",
-            "required": true
-          }
-        ]
+        "description": "Download videos, playlists, audio, and streams from YouTube, Twitch, and 1000+ other websites"
+      },
+      {
+        "id": "setup-youtube-cookies",
+        "title": "Setup YouTube cookies",
+        "description": "Import, replace, or clear the managed cookies.txt file used for YouTube downloads"
       }
     ]
   },

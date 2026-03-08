@@ -172,7 +172,7 @@ export interface ExtensionManifest {
   banner?: string;
   categories?: string[];
   tags?: string[];
-  type: ExtensionType;
+  extensionType: ExtensionType;
   main: string;
   permissions: ExtensionPermission[];
   activationEvents?: ExtensionActivationEvent[];
@@ -197,7 +197,8 @@ export interface ContextMenuContext {
 
 export interface NotificationOptions {
   title: string;
-  message: string;
+  subtitle?: string;
+  description?: string;
   type?: 'info' | 'success' | 'warning' | 'error';
   duration?: number;
 }
@@ -219,14 +220,16 @@ export interface DialogResult {
 export type ProgressLocation = 'notification' | 'statusBar';
 
 export interface ProgressOptions {
-  title: string;
+  subtitle: string;
   location?: ProgressLocation;
   cancellable?: boolean;
 }
 
 export interface ProgressReport {
-  message?: string;
+  subtitle?: string;
+  description?: string;
   increment?: number;
+  value?: number;
 }
 
 export interface Progress {
@@ -299,7 +302,7 @@ export interface BinaryInfo {
   installedAt: number;
 }
 
-export type UIElementType = 'input' | 'select' | 'checkbox' | 'textarea' | 'button' | 'separator' | 'text';
+export type UIElementType = 'input' | 'select' | 'checkbox' | 'textarea' | 'button' | 'separator' | 'text' | 'image' | 'skeleton' | 'alert' | 'previewCard' | 'previewCardSkeleton';
 
 export interface UISelectOption {
   value: string;
@@ -315,13 +318,21 @@ export interface UIElement {
   options?: UISelectOption[];
   rows?: number;
   variant?: 'primary' | 'secondary' | 'danger';
+  tone?: 'info' | 'success' | 'warning' | 'error';
   disabled?: boolean;
+  subtitle?: string;
+}
+
+export interface KeyboardShortcut {
+  key: string;
+  modifiers?: ('ctrl' | 'shift' | 'alt' | 'meta')[];
 }
 
 export interface ModalButton {
   id: string;
   label: string;
-  variant?: 'primary' | 'secondary' | 'danger';
+  variant?: 'primary' | 'secondary' | 'danger' | string;
+  shortcut?: KeyboardShortcut;
 }
 
 export interface ModalOptions {
@@ -334,8 +345,10 @@ export interface ModalOptions {
 export interface ModalHandle {
   onSubmit(callback: (values: Record<string, unknown>, buttonId: string) => void): void;
   onClose(callback: () => void): void;
+  onValueChange(callback: (elementId: string, value: unknown, allValues: Record<string, unknown>) => void): void;
   close(): void;
   updateElement(id: string, updates: Partial<UIElement>): void;
+  setContent(content: UIElement[]): void;
   getValues(): Record<string, unknown>;
 }
 
@@ -382,6 +395,22 @@ export interface SigmaExtensionAPI {
     readDir(path: string): Promise<DirEntry[]>;
     exists(path: string): Promise<boolean>;
     downloadFile(url: string, path: string): Promise<void>;
+    private: {
+      readFile(relativePath: string): Promise<Uint8Array>;
+      writeFile(relativePath: string, data: Uint8Array): Promise<void>;
+      readDir(relativePath?: string): Promise<DirEntry[]>;
+      exists(relativePath: string): Promise<boolean>;
+      resolvePath(relativePath: string): Promise<string>;
+    };
+    storage: {
+      readFile(relativePath: string): Promise<Uint8Array>;
+      writeFile(relativePath: string, data: Uint8Array): Promise<void>;
+      readDir(relativePath?: string): Promise<DirEntry[]>;
+      exists(relativePath: string): Promise<boolean>;
+      resolvePath(relativePath: string): Promise<string>;
+      importFile(sourcePath: string, targetRelativePath: string): Promise<string>;
+      deleteFile(relativePath: string): Promise<void>;
+    };
   };
 
   ui: {
@@ -398,6 +427,11 @@ export interface SigmaExtensionAPI {
     textarea(options: { id: string; label?: string; placeholder?: string; value?: string; rows?: number; disabled?: boolean }): UIElement;
     separator(): UIElement;
     text(content: string): UIElement;
+    alert(options: { title: string; description?: string; tone?: 'info' | 'success' | 'warning' | 'error' }): UIElement;
+    image(options: { id?: string; src: string; alt?: string }): UIElement;
+    previewCard(options: { thumbnail: string; title: string; subtitle?: string }): UIElement;
+    previewCardSkeleton(): UIElement;
+    skeleton(options?: { id?: string; width?: number; height?: number }): UIElement;
   };
 
   dialog: {

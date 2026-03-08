@@ -2,9 +2,87 @@
 const YTDLP_BINARY_ID = 'yt-dlp';
 const DENO_BINARY_ID = 'deno';
 const FFMPEG_BINARY_ID = 'ffmpeg';
+const COOKIES_FILE_PATH_STORAGE_KEY = 'cookies-file-path';
+const MANAGED_COOKIES_RELATIVE_PATH = 'secrets/youtube-cookies.txt';
 let cachedDenoBinaryPath = null;
 let cachedFfmpegBinaryPath = null;
 let cachedFfprobeBinaryPath = null;
+let cachedPluginDirPath = null;
+let cachedExtensionStoragePath = null;
+
+const CHROME_COOKIE_UNLOCK_PLUGIN_SOURCE = `import sys
+
+import yt_dlp.cookies
+
+original_func = yt_dlp.cookies._open_database_copy
+
+
+def unlock_chrome(database_path, tmpdir):
+    try:
+        return original_func(database_path, tmpdir)
+    except PermissionError:
+        print('Attempting to unlock cookies', file=sys.stderr)
+        unlock_cookies(database_path)
+        return original_func(database_path, tmpdir)
+
+
+yt_dlp.cookies._open_database_copy = unlock_chrome
+
+
+from ctypes import windll, byref, create_unicode_buffer, pointer, WINFUNCTYPE
+from ctypes.wintypes import DWORD, WCHAR, UINT
+
+ERROR_SUCCESS = 0
+ERROR_MORE_DATA = 234
+RmForceShutdown = 1
+
+
+@WINFUNCTYPE(None, UINT)
+def callback(percent_complete: UINT) -> None:
+    pass
+
+
+rstrtmgr = windll.LoadLibrary("Rstrtmgr")
+
+
+def unlock_cookies(cookies_path):
+    session_handle = DWORD(0)
+    session_flags = DWORD(0)
+    session_key = (WCHAR * 256)()
+
+    result = DWORD(rstrtmgr.RmStartSession(byref(session_handle), session_flags, session_key)).value
+
+    if result != ERROR_SUCCESS:
+        raise RuntimeError(f"RmStartSession returned non-zero result: {result}")
+
+    try:
+        result = DWORD(rstrtmgr.RmRegisterResources(session_handle, 1, byref(pointer(create_unicode_buffer(cookies_path))), 0, None, 0, None)).value
+
+        if result != ERROR_SUCCESS:
+            raise RuntimeError(f"RmRegisterResources returned non-zero result: {result}")
+
+        proc_info_needed = DWORD(0)
+        proc_info = DWORD(0)
+        reboot_reasons = DWORD(0)
+
+        result = DWORD(rstrtmgr.RmGetList(session_handle, byref(proc_info_needed), byref(proc_info), None, byref(reboot_reasons))).value
+
+        if result not in (ERROR_SUCCESS, ERROR_MORE_DATA):
+            raise RuntimeError(f"RmGetList returned non-successful result: {result}")
+
+        if proc_info_needed.value:
+            result = DWORD(rstrtmgr.RmShutdown(session_handle, RmForceShutdown, callback)).value
+
+            if result != ERROR_SUCCESS:
+                raise RuntimeError(f"RmShutdown returned non-successful result: {result}")
+        else:
+            print("File is not locked")
+    finally:
+        result = DWORD(rstrtmgr.RmEndSession(session_handle)).value
+
+        if result != ERROR_SUCCESS:
+            raise RuntimeError(f"RmEndSession returned non-zero result: {result}")
+`;
 
 function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
@@ -75,6 +153,55 @@ function isPathWithinPath(pathValue, rootPath) {
   const normalizedRoot = normalizePathForComparison(rootPath);
   return normalizedPath === normalizedRoot
     || normalizedPath.startsWith(`${normalizedRoot}${sigma.platform.pathSeparator}`);
+}
+
+async function getManagedCookiesFilePath() {
+  return sigma.fs.storage.resolvePath(MANAGED_COOKIES_RELATIVE_PATH);
+}
+
+async function importCookiesFile(sourcePath) {
+  const importedPath = await sigma.fs.storage.importFile(sourcePath, MANAGED_COOKIES_RELATIVE_PATH);
+  await sigma.storage.set(COOKIES_FILE_PATH_STORAGE_KEY, importedPath);
+  return importedPath;
+}
+
+async function clearStoredCookies() {
+  await sigma.storage.remove(COOKIES_FILE_PATH_STORAGE_KEY);
+  try {
+    await sigma.fs.storage.deleteFile(MANAGED_COOKIES_RELATIVE_PATH);
+  } catch (error) {
+    console.warn('[Video Downloader] Failed to delete managed cookies file:', error);
+  }
+}
+
+async function getSavedCookiesPath() {
+  const storedPath = await sigma.storage.get(COOKIES_FILE_PATH_STORAGE_KEY);
+  const managedPath = await getManagedCookiesFilePath();
+  const hasManagedCookies = await sigma.fs.storage.exists(MANAGED_COOKIES_RELATIVE_PATH);
+
+  if (hasManagedCookies) {
+    if (storedPath !== managedPath) {
+      await sigma.storage.set(COOKIES_FILE_PATH_STORAGE_KEY, managedPath);
+    }
+    return managedPath;
+  }
+
+  if (!storedPath) {
+    return null;
+  }
+
+  if (cachedExtensionStoragePath && isPathWithinPath(storedPath, cachedExtensionStoragePath)) {
+    await sigma.storage.remove(COOKIES_FILE_PATH_STORAGE_KEY);
+    return null;
+  }
+
+  try {
+    return await importCookiesFile(storedPath);
+  } catch (error) {
+    console.warn('[Video Downloader] Failed to migrate saved cookies into managed storage:', error);
+    await sigma.storage.remove(COOKIES_FILE_PATH_STORAGE_KEY);
+    return null;
+  }
 }
 
 function getDenoDirectory() {
@@ -165,6 +292,20 @@ async function renamePartFilesToTs(directory) {
 }
 
 function parseDownloadInfo(line) {
+  const delim = '\t';
+  if (line.startsWith(`PROG${delim}`)) {
+    const parts = line.split(delim);
+    if (parts.length >= 5) {
+      const percentStr = (parts[1] || '').trim();
+      const percent = percentStr && !/^N\/A%?$/i.test(percentStr) ? parseFloat(percentStr) : null;
+      const size = parts[2] && !/^N\/A$/i.test((parts[2] || '').trim()) ? String(parts[2]).replace(/\s+/g, ' ').trim() : null;
+      const speed = parts[3] && !/^Unknown\s*B\/s$/i.test((parts[3] || '').trim()) ? String(parts[3]).replace(/\s+/g, ' ').trim() : null;
+      const rawEta = (parts[4] || '').trim();
+      const eta = rawEta && !/^Unknown$/i.test(rawEta) && /^\d{1,2}:\d{2}(:\d{2})?$/.test(rawEta) ? rawEta : null;
+      return { percent: Number.isFinite(percent) ? percent : null, size, speed, eta, type: 'download' };
+    }
+  }
+
   const percentMatch = line.match(/(\d+(?:\.\d+)?)%/);
   const sizeMatch = line.match(/of\s+([\d.]+\s*\w+)/i);
   const speedMatch = line.match(/at\s+([\d.]+\s*\w+\/s)/i);
@@ -200,12 +341,8 @@ function parseFfmpegProgress(line) {
   };
 }
 
-function formatCleanProgressMessage(info) {
+function formatDownloadStats(info) {
   const parts = [];
-
-  if (info.percent !== null && info.percent !== undefined) {
-    parts.push(`${info.percent.toFixed(1)}%`);
-  }
 
   if (info.size) {
     parts.push(info.size);
@@ -219,7 +356,7 @@ function formatCleanProgressMessage(info) {
     parts.push(`ETA ${info.eta}`);
   }
 
-  return parts.length > 0 ? parts.join(' • ') : 'Downloading...';
+  return parts.length > 0 ? parts.join(' • ') : '';
 }
 
 function formatStreamProgressMessage(info) {
@@ -245,6 +382,68 @@ function formatStatusMessage(line) {
   const message = line.replace(/^\[[^\]]+\]\s*/, '').trim();
   const maxLength = 60;
   return message.length > maxLength ? message.substring(0, maxLength) + '...' : message;
+}
+
+function normalizePreviewErrorMessage(rawError) {
+  if (!rawError) return '';
+  return String(rawError)
+    .replace(/\s+/g, ' ')
+    .replace(/^error:\s*/i, '')
+    .trim();
+}
+
+function isYouTubePreviewAuthError(rawError) {
+  const lowerError = normalizePreviewErrorMessage(rawError).toLowerCase();
+  return lowerError.includes('sign in to confirm')
+    || lowerError.includes('confirm you\'re not a bot')
+    || lowerError.includes('login_required')
+    || lowerError.includes('cookies')
+    || lowerError.includes('members-only')
+    || lowerError.includes('private video')
+    || lowerError.includes('age-restricted')
+    || lowerError.includes('use --cookies-from-browser')
+    || lowerError.includes('no title found in player responses');
+}
+
+function buildPreviewNoticeElements(options) {
+  return [
+    sigma.ui.alert({
+      title: options.title,
+      description: [options.description, options.detail].filter(Boolean).join(' '),
+      tone: options.tone || 'error',
+    }),
+  ];
+}
+
+function getPreviewErrorState(url, rawError, hasSavedCookies) {
+  const platform = detectPlatform(url);
+  const normalizedError = normalizePreviewErrorMessage(rawError);
+
+  if (platform === 'youtube' && isYouTubePreviewAuthError(normalizedError)) {
+    return {
+      statusElements: buildPreviewNoticeElements({
+        title: 'Preview unavailable',
+        description: hasSavedCookies
+          ? 'Saved YouTube cookies did not unlock this video.'
+          : 'YouTube needs cookies to load the title and thumbnail.',
+        detail: hasSavedCookies
+          ? 'Replace your cookies and try again.'
+          : 'Click the button below to set up YouTube cookies.',
+      }),
+      needsCookieSetup: true,
+      cookieButtonLabel: hasSavedCookies ? 'Replace YouTube cookies' : 'Setup YouTube cookies',
+    };
+  }
+
+  return {
+    statusElements: buildPreviewNoticeElements({
+      title: 'Could not load preview',
+      description: 'The URL may be invalid, temporarily unavailable, or blocked by the website.',
+      detail: normalizedError ? 'You can try a different URL or retry in a moment.' : '',
+    }),
+    needsCookieSetup: false,
+    cookieButtonLabel: 'Setup YouTube cookies',
+  };
 }
 
 const VIDEO_QUALITY_OPTIONS = [
@@ -378,21 +577,28 @@ function buildFormatSelector(options) {
     return `bestvideo[height<=${videoQuality}]`;
   }
 
-  if (videoQuality === 'best') return 'bestvideo+bestaudio/best';
+  if (videoQuality === 'best') return null;
   return `bestvideo[height<=${videoQuality}]+bestaudio/best`;
 }
 
 function buildYtDlpArgs(options, formatSelector, extraArgs = []) {
+  const PROGRESS_DELIM = '\t';
+  const progressTemplate = `download:PROG${PROGRESS_DELIM}%(progress._percent_str)s${PROGRESS_DELIM}%(progress._total_bytes_str)s${PROGRESS_DELIM}%(progress._speed_str)s${PROGRESS_DELIM}%(progress._eta_str)s`;
+
   const args = [
     '--no-playlist',
     '--newline',
+    '--progress-template',
+    progressTemplate,
     '--remote-components',
     'ejs:npm',
     '--remote-components',
     'ejs:github',
-    '-f',
-    formatSelector,
   ];
+
+  if (formatSelector) {
+    args.push('-f', formatSelector);
+  }
 
   if (options.liveFromStart && (options.platform === 'twitch-live' || options.platform === 'youtube')) {
     args.push('--live-from-start');
@@ -409,6 +615,14 @@ function buildYtDlpArgs(options, formatSelector, extraArgs = []) {
   if (options.outputDir) {
     args.push('-P', options.outputDir);
     args.push('-o', '%(title)s.%(ext)s');
+  }
+
+  if (options.denoPath) {
+    args.push('--js-runtimes', 'deno');
+  }
+
+  if (options.pluginDir) {
+    args.push('--plugin-dirs', options.pluginDir);
   }
 
   if (options.ffmpegPath) {
@@ -444,6 +658,25 @@ function isChromeCookieCopyFailure(outputText) {
   );
 }
 
+function isDpapiDecryptionFailure(outputText) {
+  return outputText.includes('Failed to decrypt with DPAPI');
+}
+
+function isBrowserCookieNotFound(outputText) {
+  const lowerOutput = outputText.toLowerCase();
+  return lowerOutput.includes('could not find') && lowerOutput.includes('cookies database');
+}
+
+function isCookieInfraFailure(outputText) {
+  return isChromeCookieCopyFailure(outputText)
+    || isDpapiDecryptionFailure(outputText)
+    || isBrowserCookieNotFound(outputText);
+}
+
+function isChromiumBrowser(name) {
+  return name === 'chrome' || name === 'edge' || name === 'chromium';
+}
+
 function getCookieBrowserCandidates() {
   if (sigma.platform.isWindows) {
     return ['firefox', 'edge', 'chrome'];
@@ -454,66 +687,430 @@ function getCookieBrowserCandidates() {
   return ['chrome', 'chromium', 'firefox'];
 }
 
-function getPluginDirFromBinaryPath(binaryPath) {
-  const separator = sigma.platform.pathSeparator;
-  const marker = `${separator}bin${separator}${YTDLP_BINARY_ID}${separator}`;
-  const markerIndex = binaryPath.lastIndexOf(marker);
-  if (markerIndex === -1) return null;
-  return binaryPath.substring(0, markerIndex);
+async function ensureCookieUnlockPlugin() {
+  if (!sigma.platform.isWindows) return null;
+  if (cachedPluginDirPath) return cachedPluginDirPath;
+
+  try {
+    const pluginFileRelPath = 'plugins/yt-dlp-ChromeCookieUnlock/yt_dlp_plugins/postprocessor/chrome_cookie_unlock.py';
+    const pluginExists = await sigma.fs.private.exists(pluginFileRelPath);
+
+    if (!pluginExists) {
+      const pluginDirAbsPath = await sigma.fs.private.resolvePath(
+        'plugins/yt-dlp-ChromeCookieUnlock/yt_dlp_plugins/postprocessor'
+      );
+      await sigma.shell.run('cmd', ['/c', `mkdir "${pluginDirAbsPath}" 2>nul`]);
+
+      const encoder = new TextEncoder();
+      await sigma.fs.private.writeFile(pluginFileRelPath, encoder.encode(CHROME_COOKIE_UNLOCK_PLUGIN_SOURCE));
+      console.log('[Video Downloader] Installed ChromeCookieUnlock plugin');
+    }
+
+    cachedPluginDirPath = await sigma.fs.private.resolvePath('plugins');
+    console.log('[Video Downloader] Plugin directory:', cachedPluginDirPath);
+    return cachedPluginDirPath;
+  } catch (error) {
+    console.error('[Video Downloader] Failed to install cookie unlock plugin:', error);
+    return null;
+  }
 }
 
-function isChromiumBrowserName(browserName) {
-  return browserName === 'chrome' || browserName === 'edge' || browserName === 'chromium';
+async function showCookieSetupModal() {
+  const existingCookiesPath = await getSavedCookiesPath();
+  const hasSavedCookies = Boolean(existingCookiesPath);
+
+  return new Promise((resolve) => {
+    const modal = sigma.ui.createModal({
+      title: hasSavedCookies ? 'Manage YouTube cookies' : 'YouTube cookies setup',
+      width: 520,
+      content: [
+        sigma.ui.text('YouTube now requires login for most videos. Your login data is stored in browser cookies which could not be accessed automatically from your browser because Chrome and Edge use encryption (DPAPI) that prevents direct cookie access.'),
+        sigma.ui.text('To download YouTube videos, you need to export your browser cookies manually and import them into the extension. The extension stores its own managed copy so it no longer depends on the original file after import.'),
+        sigma.ui.separator(),
+        sigma.ui.text('⚠️ Warning: using your YouTube account with yt-dlp risks temporary or permanent bans. Use sparingly or consider a throwaway account.'),
+        sigma.ui.separator(),
+        sigma.ui.text('How to export cookies:'),
+        sigma.ui.text('1. Install "Get cookies.txt LOCALLY" browser extension (recommended open-source extension, others might steal your login data from cookies):'),
+        sigma.ui.text('https://github.com/kairi003/Get-cookies.txt-Locally'),
+        sigma.ui.text('2. Allow the extension in private / incognito mode (browser extension settings)'),
+        sigma.ui.text('3. Open a private / incognito browser window'),
+        sigma.ui.text('4. Log into YouTube in that window'),
+        sigma.ui.text('5. In the same tab, navigate to youtube.com/robots.txt'),
+        sigma.ui.text('6. Use the extension to export youtube.com cookies'),
+        sigma.ui.text('7. Close the incognito window (prevents cookie rotation)'),
+        sigma.ui.text('8. Import the exported cookies.txt file below, then delete the exported file from Downloads or any other folder you used'),
+      ],
+      buttons: [
+        {
+          id: 'select',
+          label: hasSavedCookies ? 'Replace stored cookies' : 'Import cookies.txt file',
+          variant: 'primary',
+          shortcut: { key: 'Enter' }
+        },
+        ...(hasSavedCookies ? [{ id: 'clear', label: 'Clear stored cookies', variant: 'danger' }] : []),
+      ],
+    });
+
+    modal.onSubmit(async (_values, buttonId) => {
+      if (buttonId === 'select') {
+        const selectedFile = await sigma.dialog.openFile({
+          title: 'Select cookies.txt file',
+          filters: [{ name: 'Cookie files', extensions: ['txt'] }],
+        });
+        const filePath = Array.isArray(selectedFile) ? selectedFile[0] : selectedFile;
+        if (!filePath) {
+          resolve(null);
+          return;
+        }
+
+        try {
+          const managedPath = await importCookiesFile(filePath);
+          sigma.ui.showNotification({
+            title: 'Video Downloader',
+            subtitle: 'YouTube cookies imported. You can now delete the exported cookies.txt file you selected.',
+            type: 'success',
+          });
+          resolve({ action: 'imported', path: managedPath });
+        } catch (error) {
+          sigma.ui.showNotification({
+            title: 'Video Downloader',
+            subtitle: error?.message || 'Failed to import cookies.txt file.',
+            type: 'error',
+          });
+          resolve(null);
+        }
+        return;
+      }
+
+      if (buttonId === 'clear') {
+        await clearStoredCookies();
+        sigma.ui.showNotification({
+          title: 'Video Downloader',
+          subtitle: 'Stored YouTube cookies were removed.',
+          type: 'info',
+        });
+        resolve({ action: 'cleared' });
+      }
+    });
+
+    modal.onClose(() => {
+      resolve(null);
+    });
+  });
 }
 
-function createDownloadModal(prefilledUrl) {
+function buildPreviewContent(url, videoInfo, previewState) {
+  const baseContent = [
+    sigma.ui.input({
+      id: 'url',
+      label: 'Website URL',
+      placeholder: 'Paste URL here',
+      value: url || '',
+    }),
+  ];
+
+  if (videoInfo && videoInfo.thumbnail) {
+    baseContent.push(
+      sigma.ui.text('Supports YouTube, Twitch, and 1000+ other websites'),
+      sigma.ui.previewCard({
+        thumbnail: videoInfo.thumbnail,
+        title: videoInfo.title || 'Untitled',
+        subtitle: videoInfo.subtitle || '',
+      }),
+      sigma.ui.separator(),
+      sigma.ui.select({
+        id: 'mode',
+        label: 'Download type',
+        options: DOWNLOAD_MODES,
+        value: 'video-audio',
+      }),
+      sigma.ui.select({
+        id: 'videoQuality',
+        label: 'Video quality',
+        options: VIDEO_QUALITY_OPTIONS,
+        value: 'best',
+      }),
+      sigma.ui.select({
+        id: 'audioQuality',
+        label: 'Audio quality',
+        options: AUDIO_QUALITY_OPTIONS,
+        value: 'best',
+      }),
+      sigma.ui.checkbox({
+        id: 'liveFromStart',
+        label: 'Record live stream from beginning (YouTube/Twitch only, experimental)',
+        checked: false,
+      }),
+    );
+  } else {
+    baseContent.push(sigma.ui.text('Supports YouTube, Twitch, and 1000+ other websites'));
+    if (previewState?.statusElements?.length) {
+      baseContent.push(...previewState.statusElements);
+    } else if (previewState?.statusText) {
+      baseContent.push({ type: 'text', id: 'status', value: previewState.statusText });
+    }
+    if (previewState?.isLoading) {
+      baseContent.push(sigma.ui.previewCardSkeleton());
+    }
+  }
+
+  return baseContent;
+}
+
+function formatPreviewSubtitle(data) {
+  const parts = [];
+  const type = data._type || 'video';
+  const liveStatus = data.live_status;
+
+  if (liveStatus === 'is_live') {
+    parts.push('Live stream');
+  }
+  else if (liveStatus === 'is_upcoming') {
+    parts.push('Upcoming');
+  }
+  else if (type === 'playlist' || type === 'multi_video') {
+    const count = data.n_entries ?? data.playlist_count ?? data.entries?.length;
+    const label = count !== undefined ? `${count} ${count === 1 ? 'video' : 'videos'}` : 'Playlist';
+    parts.push(label);
+  }
+  else {
+    const duration = data.duration;
+    if (typeof duration === 'number' && duration > 0) {
+      const minutes = Math.floor(duration / 60);
+      const seconds = Math.floor(duration % 60);
+      parts.push(minutes >= 60
+        ? `${Math.floor(minutes / 60)}:${String(minutes % 60).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`
+        : `${minutes}:${String(seconds).padStart(2, '0')}`);
+    }
+    else {
+      parts.push('Video');
+    }
+  }
+
+  const uploader = data.uploader || data.channel || data.creator;
+  if (uploader) {
+    parts.push(uploader);
+  }
+
+  return parts.join(' · ') || null;
+}
+
+function buildVideoInfoArgs(url, options) {
+  const args = [
+    '--no-playlist',
+    '--dump-json',
+    '--remote-components',
+    'ejs:npm',
+    '--remote-components',
+    'ejs:github',
+  ];
+
+  if (options.denoPath) {
+    args.push('--js-runtimes', 'deno');
+  }
+
+  if (options.pluginDir) {
+    args.push('--plugin-dirs', options.pluginDir);
+  }
+
+  if (options.cookiesFilePath) {
+    args.push('--cookies', options.cookiesFilePath);
+  }
+
+  args.push(url);
+  return args;
+}
+
+async function thumbnailUrlToDataUrl(thumbnailUrl) {
+  try {
+    const ext = thumbnailUrl.includes('.webp') ? 'webp' : 'jpg';
+    const relPath = `preview.${ext}`;
+    const fullPath = await sigma.fs.private.resolvePath(relPath);
+    await sigma.fs.downloadFile(thumbnailUrl, fullPath);
+    const bytes = await sigma.fs.private.readFile(relPath);
+    const uint8 = new Uint8Array(bytes);
+    let binary = '';
+    const chunkSize = 8192;
+    for (let offset = 0; offset < uint8.length; offset += chunkSize) {
+      binary += String.fromCharCode.apply(null, uint8.subarray(offset, offset + chunkSize));
+    }
+    const base64 = btoa(binary);
+    const mime = ext === 'webp' ? 'image/webp' : 'image/jpeg';
+    return `data:${mime};base64,${base64}`;
+  } catch (err) {
+    console.warn('[Video Downloader] thumbnailUrlToDataUrl failed, using URL:', err);
+    return thumbnailUrl;
+  }
+}
+
+async function fetchVideoInfo(effectiveBinaryPath, url, toolchainOptions) {
+  try {
+    const args = buildVideoInfoArgs(url, toolchainOptions);
+    const result = await sigma.shell.run(effectiveBinaryPath, args);
+    if (result.code !== 0 || !result.stdout || !result.stdout.trim()) {
+      const stderrSummary = extractErrorFromStderr(result.stderr || '') || result.stderr?.split('\n').filter((line) => line.trim()).slice(-3).join(' ') || 'Unknown error';
+      return { error: stderrSummary };
+    }
+    const data = JSON.parse(result.stdout);
+    let thumbnail = null;
+    const targetWidth = 128;
+    if (data.thumbnails && data.thumbnails.length > 0) {
+      const withUrl = data.thumbnails.filter((t) => t.url);
+      if (withUrl.length > 0) {
+        const byWidth = [...withUrl].sort((a, b) => {
+          const widthA = a.width ?? Infinity;
+          const widthB = b.width ?? Infinity;
+          return widthA - widthB;
+        });
+        const suitable = byWidth.find((t) => (t.width ?? 0) >= targetWidth);
+        thumbnail = (suitable ?? byWidth[0]).url;
+      }
+    }
+    if (!thumbnail) {
+      thumbnail = data.thumbnail;
+    }
+    if (!thumbnail) {
+      return { error: 'No thumbnail in response' };
+    }
+    const dataUrl = await thumbnailUrlToDataUrl(thumbnail);
+    const subtitle = formatPreviewSubtitle(data);
+    return { title: data.title || '', thumbnail: dataUrl, subtitle };
+  } catch (parseError) {
+    const message = parseError?.message || String(parseError);
+    console.error('[Video Downloader] fetchVideoInfo error:', parseError);
+    return { error: message };
+  }
+}
+
+async function createDownloadModal(prefilledUrl) {
+  let videoInfoValid = false;
+  let debounceTimeout = null;
+  let fetchAborted = false;
+
   return new Promise((resolve) => {
     const modal = sigma.ui.createModal({
       title: 'Download from URL',
       width: 480,
-      content: [
-        sigma.ui.input({
-          id: 'url',
-          label: 'Website URL',
-          placeholder: 'Paste URL here',
-          value: prefilledUrl || '',
-        }),
-        sigma.ui.text('Supports YouTube, Twitch, and 1000+ other websites'),
-        sigma.ui.separator(),
-        sigma.ui.select({
-          id: 'mode',
-          label: 'Download type',
-          options: DOWNLOAD_MODES,
-          value: 'video-audio',
-        }),
-        sigma.ui.select({
-          id: 'videoQuality',
-          label: 'Video quality',
-          options: VIDEO_QUALITY_OPTIONS,
-          value: 'best',
-        }),
-        sigma.ui.select({
-          id: 'audioQuality',
-          label: 'Audio quality',
-          options: AUDIO_QUALITY_OPTIONS,
-          value: 'best',
-        }),
-        sigma.ui.checkbox({
-          id: 'liveFromStart',
-          label: 'Record live stream from beginning (YouTube/Twitch only, experimental)',
-          checked: false,
-        }),
-      ],
+      content: buildPreviewContent(prefilledUrl || '', null, { statusText: 'Paste a URL to see preview and options' }),
       buttons: [
-        { id: 'cancel', label: 'Cancel', variant: 'secondary' },
-        { id: 'download', label: 'Download', variant: 'primary' },
+        { id: 'download', label: 'Download', variant: 'primary', shortcut: { key: 'Enter' } },
       ],
     });
 
-    modal.onSubmit((values, buttonId) => {
-      if (buttonId === 'cancel') {
-        resolve(null);
+    async function onUrlChange(urlValue) {
+      const url = typeof urlValue === 'string' ? urlValue.trim() : '';
+      if (debounceTimeout) {
+        clearTimeout(debounceTimeout);
+        debounceTimeout = null;
+      }
+      fetchAborted = true;
+      videoInfoValid = false;
+
+      if (!url) {
+        modal.setContent(buildPreviewContent('', null, { statusText: 'Paste a URL to see preview and options' }));
         return;
+      }
+
+      modal.setContent(buildPreviewContent(url, null, { statusText: 'Checking URL...', isLoading: true }));
+      const urlForFetch = url;
+
+      debounceTimeout = setTimeout(async () => {
+        debounceTimeout = null;
+        fetchAborted = false;
+        let effectiveBinaryPath;
+        let toolchainOptions;
+        try {
+          const installResult = await ensureBinaryInstalled();
+          await ensureToolchainReady();
+          const denoPath = cachedDenoBinaryPath || await ensureDenoInstalled();
+          const denoDir = getDirectoryFromPath(denoPath);
+          const wrapperPath = denoDir ? await ensureYtDlpWrapper(installResult.binaryPath, denoDir) : null;
+          effectiveBinaryPath = wrapperPath || installResult.binaryPath;
+          const pluginDir = await ensureCookieUnlockPlugin();
+          const platform = detectPlatform(urlForFetch);
+          const savedCookiesPath = platform === 'youtube' ? await getSavedCookiesPath() : null;
+          toolchainOptions = {
+            denoPath,
+            pluginDir,
+            cookiesFilePath: savedCookiesPath || undefined,
+          };
+        } catch {
+          if (fetchAborted) return;
+          modal.setContent(buildPreviewContent(urlForFetch, null, {
+            statusText: 'Failed to set up Video Downloader. Try reinstalling the extension.',
+          }));
+          return;
+        }
+
+        const videoInfo = await fetchVideoInfo(effectiveBinaryPath, urlForFetch, toolchainOptions);
+        if (fetchAborted) return;
+
+        if (videoInfo && videoInfo.thumbnail) {
+          videoInfoValid = true;
+          const isYouTubeUrl = detectPlatform(urlForFetch) === 'youtube';
+          const savedCookiesPath = await getSavedCookiesPath();
+          const showCookieWarning = isYouTubeUrl && !savedCookiesPath;
+          const fullContent = buildPreviewContent(urlForFetch, videoInfo, null);
+          if (showCookieWarning) {
+            fullContent.push(sigma.ui.separator());
+            fullContent.push(sigma.ui.text('Some YouTube videos need cookies before they can be downloaded.'));
+            fullContent.push({ type: 'button', id: 'setup-cookies', label: 'Setup YouTube cookies', variant: 'primary' });
+          }
+          modal.setContent(fullContent);
+          modal.updateElement('url', { value: urlForFetch });
+        } else {
+          const rawError = videoInfo?.error || '';
+          const savedCookiesPath = detectPlatform(urlForFetch) === 'youtube'
+            ? await getSavedCookiesPath()
+            : null;
+          const previewErrorState = getPreviewErrorState(urlForFetch, rawError, Boolean(savedCookiesPath));
+          const errorContent = buildPreviewContent(urlForFetch, null, previewErrorState);
+          if (previewErrorState.needsCookieSetup) {
+            errorContent.push(sigma.ui.separator());
+            errorContent.push({
+              type: 'button',
+              id: 'setup-cookies',
+              label: previewErrorState.cookieButtonLabel,
+              variant: 'primary'
+            });
+          }
+          modal.setContent(errorContent);
+          modal.updateElement('url', { value: urlForFetch });
+        }
+      }, 400);
+    }
+
+    modal.onValueChange((elementId, value) => {
+      if (elementId === 'url') {
+        onUrlChange(value);
+      }
+    });
+
+    if (prefilledUrl && prefilledUrl.trim()) {
+      onUrlChange(prefilledUrl);
+    }
+
+    modal.onSubmit(async (values, buttonId) => {
+      if (buttonId === 'setup-cookies') {
+        const cookieSetupResult = await showCookieSetupModal();
+        if (cookieSetupResult) {
+          const url = typeof values.url === 'string' ? values.url.trim() : '';
+          if (url) {
+            onUrlChange(url);
+          } else if (cookieSetupResult.action === 'imported') {
+            modal.updateElement('setup-cookies', { label: 'Cookies configured', disabled: true });
+          }
+        }
+        return false;
+      }
+
+      if (buttonId === 'download' && !videoInfoValid) {
+        sigma.ui.showNotification({
+          title: 'Video Downloader',
+          subtitle: 'Wait for the preview to load before downloading.',
+          type: 'info',
+        });
+        return false;
       }
 
       const url = typeof values.url === 'string' ? values.url : '';
@@ -527,18 +1124,41 @@ function createDownloadModal(prefilledUrl) {
       resolve({
         url: url.trim(),
         platform,
-        mode: values.mode,
-        videoQuality: values.videoQuality,
-        audioQuality: values.audioQuality,
-        twitchQuality: values.videoQuality,
-        liveFromStart: values.liveFromStart,
+        mode: values.mode ?? 'video-audio',
+        videoQuality: values.videoQuality ?? 'best',
+        audioQuality: values.audioQuality ?? 'best',
+        twitchQuality: values.videoQuality ?? 'best',
+        liveFromStart: values.liveFromStart ?? false,
       });
     });
 
     modal.onClose(() => {
+      fetchAborted = true;
+      if (debounceTimeout) clearTimeout(debounceTimeout);
       resolve(null);
     });
   });
+}
+
+let cachedWrapperPath = null;
+
+async function ensureYtDlpWrapper(ytDlpBinaryPath, denoDir) {
+  if (cachedWrapperPath) return cachedWrapperPath;
+
+  if (sigma.platform.isWindows) {
+    const script = `@echo off\r\nset "PATH=${denoDir};%PATH%"\r\n"${ytDlpBinaryPath}" %*\r\n`;
+    const wrapperRelativePath = 'yt-dlp-wrapper.cmd';
+    await sigma.fs.private.writeFile(wrapperRelativePath, new TextEncoder().encode(script));
+    cachedWrapperPath = await sigma.fs.private.resolvePath(wrapperRelativePath);
+  } else {
+    const script = `#!/bin/sh\nexport PATH="${denoDir}:$PATH"\n"${ytDlpBinaryPath}" "$@"\n`;
+    const wrapperRelativePath = 'yt-dlp-wrapper.sh';
+    await sigma.fs.private.writeFile(wrapperRelativePath, new TextEncoder().encode(script));
+    cachedWrapperPath = await sigma.fs.private.resolvePath(wrapperRelativePath);
+  }
+
+  console.log('[Video Downloader] Created wrapper at:', cachedWrapperPath);
+  return cachedWrapperPath;
 }
 
 async function runYtDlp(binaryPath, options) {
@@ -546,33 +1166,43 @@ async function runYtDlp(binaryPath, options) {
   await ensureToolchainReady();
   const ffmpegPath = await ensureFfmpegInstalled();
   const ffmpegDir = getDirectoryFromPath(ffmpegPath);
+  const pluginDir = await ensureCookieUnlockPlugin();
+  const denoPath = cachedDenoBinaryPath || await ensureDenoInstalled();
+  const denoDir = getDirectoryFromPath(denoPath);
+  const wrapperPath = denoDir ? await ensureYtDlpWrapper(binaryPath, denoDir) : null;
+  const effectiveBinaryPath = wrapperPath || binaryPath;
   console.log('[Video Downloader] Using ffmpeg path:', ffmpegPath);
+  console.log('[Video Downloader] Using deno path:', denoPath);
+  console.log('[Video Downloader] Using wrapper:', effectiveBinaryPath);
   const ytDlpOptions = {
     ...options,
     ffmpegPath,
     ffmpegDir,
+    pluginDir,
+    denoPath,
   };
   const defaultArgs = buildYtDlpArgs(ytDlpOptions, formatSelector);
 
   console.log('[Video Downloader] Running yt-dlp with args:', JSON.stringify(defaultArgs));
 
-  let lastPercent = 0;
+  let lastDownloadState = { size: null, speed: null, eta: null };
   let lastUpdateTime = 0;
   let pendingUpdate = null;
   let isLiveStream = false;
   let streamDetected = false;
   let isCancelled = false;
   let activeCancelCommand = null;
+  let cookieRetriesExhausted = false;
   const UPDATE_INTERVAL = 200;
 
-  function throttledUpdate(message, increment) {
+  function throttledUpdate(update) {
     if (isCancelled) return;
 
     const now = Date.now();
     if (now - lastUpdateTime >= UPDATE_INTERVAL) {
       lastUpdateTime = now;
       if (options.onProgress) {
-        options.onProgress({ message, increment });
+        options.onProgress(update);
       }
     } else {
       if (pendingUpdate) {
@@ -580,12 +1210,12 @@ async function runYtDlp(binaryPath, options) {
       }
       const timeout = setTimeout(() => {
         if (pendingUpdate && options.onProgress && !isCancelled) {
-          options.onProgress({ message: pendingUpdate.message, increment: pendingUpdate.increment });
+          options.onProgress(pendingUpdate.data);
           pendingUpdate = null;
           lastUpdateTime = Date.now();
         }
       }, UPDATE_INTERVAL - (now - lastUpdateTime));
-      pendingUpdate = { message, increment, timeout };
+      pendingUpdate = { data: update, timeout };
     }
   }
 
@@ -609,26 +1239,36 @@ async function runYtDlp(binaryPath, options) {
         }
       }
 
-      if (line.includes('[download]')) {
+      if (line.startsWith('PROG\t') || line.includes('[download]')) {
         const info = parseDownloadInfo(line);
 
         if (info.percent !== null) {
-          const increment = Math.max(0, info.percent - lastPercent);
-          lastPercent = info.percent;
-          throttledUpdate(formatCleanProgressMessage(info), increment);
+          const merged = {
+            percent: info.percent,
+            size: info.size ?? lastDownloadState.size,
+            speed: info.speed ?? lastDownloadState.speed,
+            eta: info.eta ?? lastDownloadState.eta,
+          };
+          if (info.size !== null) lastDownloadState.size = info.size;
+          if (info.speed !== null) lastDownloadState.speed = info.speed;
+          if (info.eta !== null) lastDownloadState.eta = info.eta;
+          throttledUpdate({
+            subtitle: 'Downloading...',
+            description: formatDownloadStats(merged),
+            value: Math.max(0, Math.min(100, merged.percent)),
+          });
           return;
         }
 
-        throttledUpdate(formatStatusMessage(line), 0);
+        throttledUpdate({ subtitle: 'Preparing to download...', description: formatStatusMessage(line) });
         return;
       }
 
       const ffmpegInfo = parseFfmpegProgress(line);
       if (ffmpegInfo) {
-        const message = isLiveStream
-          ? formatStreamProgressMessage(ffmpegInfo)
-          : formatStreamProgressMessage(ffmpegInfo);
-        throttledUpdate(message, 0);
+        lastDownloadState = { size: null, speed: null, eta: null };
+        const statusTitle = isLiveStream ? 'Recording stream...' : 'Processing...';
+        throttledUpdate({ subtitle: statusTitle, description: formatStreamProgressMessage(ffmpegInfo) });
         return;
       }
 
@@ -637,7 +1277,8 @@ async function runYtDlp(binaryPath, options) {
         || line.includes('[ExtractAudio]')
         || line.includes('[FixupM3u8]')
       ) {
-        throttledUpdate('Finalizing...', 0);
+        lastDownloadState = { size: null, speed: null, eta: null };
+        throttledUpdate({ subtitle: 'Finalizing...', description: '' });
         return;
       }
 
@@ -649,14 +1290,14 @@ async function runYtDlp(binaryPath, options) {
         || line.includes('[generic')
         || line.match(/^\[\w+\]/)
       ) {
-        throttledUpdate(formatStatusMessage(line), 0);
+        throttledUpdate({ subtitle: 'Preparing to download...', description: formatStatusMessage(line) });
       }
   };
 
   async function runYtDlpAttempt(attemptArgs, attemptLabel) {
     console.log('[Video Downloader] Running yt-dlp attempt:', attemptLabel, JSON.stringify(attemptArgs));
     const commandTask = await sigma.shell.runWithProgress(
-      binaryPath,
+      effectiveBinaryPath,
       attemptArgs,
       handleProgressLine
     );
@@ -687,57 +1328,93 @@ async function runYtDlp(binaryPath, options) {
     });
   }
 
+  if (options.cookiesFilePath) {
+    throttledUpdate({ subtitle: 'Downloading with cookies...', description: '' });
+    const cookiesArgs = buildYtDlpArgs(ytDlpOptions, formatSelector, [
+      '--cookies', options.cookiesFilePath,
+    ]);
+    const cookiesResult = await runYtDlpAttempt(cookiesArgs, 'explicit-cookies-file');
+    if (cookiesResult.code === 0) {
+      return { success: true, needsCookieSetup: false };
+    }
+    if (!isCancelled) {
+      const errorMessage = extractErrorFromStderr(cookiesResult.stderr || '');
+      sigma.ui.showNotification({
+        title: 'Download failed',
+        subtitle: errorMessage || 'yt-dlp exited with an error. Check the URL and try again.',
+        type: 'error'
+      });
+    }
+    return { success: false, needsCookieSetup: false };
+  }
+
   let commandResult = await runYtDlpAttempt(defaultArgs, 'default');
 
   if (commandResult.code !== 0 && !isCancelled) {
     const fullOutput = (commandResult.stderr || '') + '\n' + (commandResult.stdout || '');
     if (shouldRetryWithBrowserCookies(options, fullOutput)) {
-      const extractorRetryArgs = buildYtDlpArgs(ytDlpOptions, formatSelector, [
-        '--extractor-args',
-        'youtube:player_client=tv,ios,web',
-      ]);
-      throttledUpdate('Retrying with alternate YouTube clients...', 0);
-      const extractorRetryResult = await runYtDlpAttempt(extractorRetryArgs, 'youtube-client-fallback');
-      commandResult = extractorRetryResult;
+      const savedCookiesPath = await getSavedCookiesPath();
+      if (savedCookiesPath && !isCancelled) {
+        throttledUpdate({ subtitle: 'Checking browser cookies...', description: 'Trying saved cookies file' });
+        const savedCookiesArgs = buildYtDlpArgs(ytDlpOptions, formatSelector, [
+          '--cookies', savedCookiesPath,
+        ]);
+        const savedCookiesResult = await runYtDlpAttempt(savedCookiesArgs, 'saved-cookies-file');
+        commandResult = savedCookiesResult;
+        if (savedCookiesResult.code === 0) {
+          return { success: true, needsCookieSetup: false };
+        }
+        const savedCookiesOutput = (savedCookiesResult.stderr || '') + '\n' + (savedCookiesResult.stdout || '');
+        if (!shouldRetryWithBrowserCookies({ platform: options.platform }, savedCookiesOutput)) {
+          console.log('[Video Downloader] Saved cookies worked (auth passed) but download failed for another reason');
+          return { success: false, needsCookieSetup: false };
+        }
+        console.log('[Video Downloader] Saved cookies file did not work, clearing saved path');
+        await clearStoredCookies();
+      }
 
-      if (extractorRetryResult.code === 0) {
-        return;
+      if (commandResult.code !== 0 && !isCancelled) {
+        const extractorRetryArgs = buildYtDlpArgs(ytDlpOptions, formatSelector, [
+          '--extractor-args',
+          'youtube:player_client=tv,ios,web',
+        ]);
+        throttledUpdate({ subtitle: 'Checking browser cookies...', description: 'Trying alternate YouTube clients' });
+        const extractorRetryResult = await runYtDlpAttempt(extractorRetryArgs, 'youtube-client-fallback');
+        commandResult = extractorRetryResult;
+      }
+
+      if (commandResult.code === 0) {
+        return { success: true, needsCookieSetup: false };
       }
 
       const browserCandidates = getCookieBrowserCandidates();
-      let lastNonCookieCopyErrorResult = commandResult;
+      let chromiumDpapiFailure = false;
       for (const browserName of browserCandidates) {
         if (isCancelled) break;
-        throttledUpdate(`Retrying with ${browserName} cookies...`, 0);
+        if (chromiumDpapiFailure && isChromiumBrowser(browserName)) {
+          console.log(`[Video Downloader] Skipping ${browserName} (DPAPI decryption failed for another Chromium browser)`);
+          continue;
+        }
+        throttledUpdate({ subtitle: 'Checking browser cookies...', description: `Trying ${browserName}` });
         const retryExtraArgs = [
           '--cookies-from-browser',
           browserName,
         ];
 
-        if (sigma.platform.isWindows && isChromiumBrowserName(browserName)) {
-          const pluginDir = getPluginDirFromBinaryPath(binaryPath);
-          if (pluginDir) {
-            retryExtraArgs.unshift('--plugin-dirs', pluginDir);
-          }
-        }
-
         const retryArgs = buildYtDlpArgs(ytDlpOptions, formatSelector, retryExtraArgs);
         const retryResult = await runYtDlpAttempt(retryArgs, `cookies:${browserName}`);
         commandResult = retryResult;
         const retryOutputText = (retryResult.stderr || '') + '\n' + (retryResult.stdout || '');
-        if (!isChromeCookieCopyFailure(retryOutputText)) {
-          lastNonCookieCopyErrorResult = retryResult;
+        if (isDpapiDecryptionFailure(retryOutputText) && isChromiumBrowser(browserName)) {
+          chromiumDpapiFailure = true;
         }
         if (retryResult.code === 0) {
           break;
         }
       }
 
-      if (commandResult.code !== 0) {
-        const finalOutputText = (commandResult.stderr || '') + '\n' + (commandResult.stdout || '');
-        if (isChromeCookieCopyFailure(finalOutputText) && lastNonCookieCopyErrorResult) {
-          commandResult = lastNonCookieCopyErrorResult;
-        }
+      if (commandResult.code !== 0 && !isCancelled) {
+        cookieRetriesExhausted = true;
       }
     }
   }
@@ -754,32 +1431,32 @@ async function runYtDlp(binaryPath, options) {
     console.error('[Video Downloader] stderr:', stderrText);
     console.error('[Video Downloader] stdout:', stdoutText);
 
+    if (cookieRetriesExhausted) {
+      return { success: false, needsCookieSetup: true };
+    }
+
     if (needsLogin) {
       sigma.ui.showNotification({
         title: 'Download failed',
-        message: 'This video requires YouTube login. Try a different video, or use yt-dlp with --cookies-from-browser option from the terminal.',
-        type: 'error'
-      });
-    } else if (isChromeCookieCopyFailure(fullOutput)) {
-      sigma.ui.showNotification({
-        title: 'Download failed',
-        message: 'Could not access Chromium cookies. Close Chrome/Edge and retry, or use Firefox cookies.',
+        subtitle: 'This video requires YouTube login. Use the "Setup YouTube cookies" command to configure cookie access.',
         type: 'error'
       });
     } else if (needsJsRuntime) {
       sigma.ui.showNotification({
         title: 'Download failed',
-        message: 'YouTube requires a JavaScript runtime (Deno). Try reinstalling the extension.',
+        subtitle: 'YouTube requires a JavaScript runtime (Deno). Try reinstalling the extension.',
         type: 'error'
       });
     } else {
       sigma.ui.showNotification({
         title: 'Download failed',
-        message: errorMessage || 'yt-dlp exited with an error. Try updating yt-dlp by reinstalling the extension.',
+        subtitle: errorMessage || 'yt-dlp exited with an error. Try updating yt-dlp by reinstalling the extension.',
         type: 'error'
       });
     }
   }
+
+  return { success: commandResult.code === 0, needsCookieSetup: false };
 }
 
 async function handleDownloadCommand(prefilledUrl) {
@@ -789,41 +1466,37 @@ async function handleDownloadCommand(prefilledUrl) {
     return;
   }
 
+  const installResult = await ensureBinaryInstalled();
+  await ensureToolchainReady();
+
   let outputDir = sigma.context.getCurrentPath();
+  let usedFallback = false;
+
+  const ytDlpBinaryDir = getDirectoryFromPath(installResult.binaryPath);
+  if (outputDir && ytDlpBinaryDir && isPathWithinPath(outputDir, ytDlpBinaryDir)) {
+    outputDir = null;
+  }
 
   if (!outputDir) {
     try {
       outputDir = await sigma.context.getDownloadsDir();
+      usedFallback = true;
     } catch (error) {
       sigma.ui.showNotification({
         title: 'Video Downloader',
-        message: 'Could not determine download location.',
+        subtitle: 'Could not determine download location. Open a folder in the navigator and try again.',
         type: 'error'
       });
       return;
     }
   }
 
-  const installResult = await ensureBinaryInstalled();
-  await ensureToolchainReady();
-
-  const ytDlpBinaryDir = getDirectoryFromPath(installResult.binaryPath);
-  if (outputDir && ytDlpBinaryDir && isPathWithinPath(outputDir, ytDlpBinaryDir)) {
-    try {
-      outputDir = await sigma.context.getDownloadsDir();
-      sigma.ui.showNotification({
-        title: 'Video Downloader',
-        message: 'Download location was reset to Downloads to avoid writing into extension binaries.',
-        type: 'info',
-      });
-    } catch (error) {
-      sigma.ui.showNotification({
-        title: 'Video Downloader',
-        message: 'Could not resolve a safe download location. Please choose a folder in the file browser and retry.',
-        type: 'error'
-      });
-      return;
-    }
+  if (usedFallback) {
+    sigma.ui.showNotification({
+      title: 'Video Downloader',
+      subtitle: 'No folder open in navigator. Downloading to Downloads folder.',
+      type: 'info',
+    });
   }
 
   let isLiveStream = modalResult.platform === 'twitch-live';
@@ -832,22 +1505,23 @@ async function handleDownloadCommand(prefilledUrl) {
 
   const progressResult = await sigma.ui.withProgress(
     {
-      title: progressTitle,
+      subtitle: progressTitle,
       location: 'notification',
       cancellable: true
     },
     async (progress, token) => {
       let onCancelHandler = null;
       token.onCancellationRequested(() => {
-        console.log('[Video Downloader] Cancellation requested, onCancelHandler set:', !!onCancelHandler);
+        const stoppedMessage = isLiveStream
+          ? 'Recording stopped. Video saved up to this point.'
+          : 'Download stopped';
+        progress.report({ subtitle: stoppedMessage, description: '' });
         if (onCancelHandler) {
           onCancelHandler();
-        } else {
-          console.warn('[Video Downloader] onCancelHandler not set yet!');
         }
       });
 
-      await runYtDlp(installResult.binaryPath, {
+      const downloadResult = await runYtDlp(installResult.binaryPath, {
         url: modalResult.url,
         platform: modalResult.platform,
         mode: modalResult.mode,
@@ -866,27 +1540,31 @@ async function handleDownloadCommand(prefilledUrl) {
       });
 
       if (token.isCancellationRequested) {
-        return { cancelled: true, isLiveStream };
+        return { cancelled: true, isLiveStream, needsCookieSetup: false };
       }
 
-      progress.report({
-        message: 'Download complete',
-        increment: 100
-      });
+      if (downloadResult && downloadResult.needsCookieSetup) {
+        return { cancelled: false, isLiveStream, needsCookieSetup: true };
+      }
 
-      await sleep(1500);
-      return { cancelled: false, isLiveStream };
+      if (downloadResult && downloadResult.success) {
+        progress.report({ description: 'Download complete', value: 100 });
+        await sleep(1500);
+      }
+
+      return { cancelled: false, isLiveStream, needsCookieSetup: false };
     }
   );
 
   if (progressResult.cancelled) {
-    sigma.ui.showNotification({
-      title: 'Video Downloader',
-      message: isLiveStream
-        ? 'Recording stopped. Video saved up to this point.'
-        : 'Download stopped',
-      type: 'info'
-    });
+    return;
+  }
+
+  if (progressResult.needsCookieSetup) {
+    const cookieSetupResult = await showCookieSetupModal();
+    if (!cookieSetupResult || cookieSetupResult.action !== 'imported') return;
+    await handleDownloadCommand(modalResult.url);
+    return;
   }
 }
 
@@ -900,24 +1578,36 @@ async function handleStartupActivation() {
 
 async function performStartupActivation() {
   const autoUpdate = (await sigma.settings.get('autoUpdateBinary')) !== false;
-  if (!autoUpdate) return;
+  if (autoUpdate) {
+    try {
+      await ensureBinaryInstalled();
+    } catch (error) {
+      console.warn('[Video Downloader] Failed to ensure yt-dlp installed:', error);
+    }
 
-  try {
-    await ensureBinaryInstalled();
-  } catch (error) {
-    console.warn('[Video Downloader] Failed to ensure yt-dlp installed:', error);
+    try {
+      await ensureDenoInstalled();
+    } catch (error) {
+      console.warn('[Video Downloader] Failed to ensure Deno installed:', error);
+    }
+
+    try {
+      await ensureFfmpegInstalled();
+    } catch (error) {
+      console.warn('[Video Downloader] Failed to ensure ffmpeg installed:', error);
+    }
+
+    try {
+      await ensureCookieUnlockPlugin();
+    } catch (error) {
+      console.warn('[Video Downloader] Failed to install cookie unlock plugin:', error);
+    }
   }
 
   try {
-    await ensureDenoInstalled();
+    await getSavedCookiesPath();
   } catch (error) {
-    console.warn('[Video Downloader] Failed to ensure Deno installed:', error);
-  }
-
-  try {
-    await ensureFfmpegInstalled();
-  } catch (error) {
-    console.warn('[Video Downloader] Failed to ensure ffmpeg installed:', error);
+    console.warn('[Video Downloader] Failed to initialize managed cookies storage:', error);
   }
 }
 
@@ -925,16 +1615,23 @@ async function handleInstallActivation() {
   try {
     await ensureBinaryInstalled();
     await ensureToolchainReady();
+    await ensureCookieUnlockPlugin();
   } catch (error) {
     sigma.ui.showNotification({
       title: 'Video Downloader',
-      message: error.message || 'Failed to set up Video Downloader',
+      subtitle: error.message || 'Failed to set up Video Downloader',
       type: 'error'
     });
   }
 }
 
 async function handleUninstallActivation() {
+  try {
+    await clearStoredCookies();
+  } catch (error) {
+    console.warn('[Video Downloader] Failed to clear stored cookies:', error);
+  }
+
   try {
     await sigma.binary.remove(YTDLP_BINARY_ID);
   } catch (error) {
@@ -956,26 +1653,30 @@ async function handleUninstallActivation() {
   cachedDenoBinaryPath = null;
   cachedFfmpegBinaryPath = null;
   cachedFfprobeBinaryPath = null;
+  cachedPluginDirPath = null;
+  cachedWrapperPath = null;
 }
 
 async function activate(context) {
+  cachedExtensionStoragePath = context?.storagePath || null;
+
   sigma.commands.registerCommand(
     {
       id: 'download-video',
-      title: 'Download video, playlist, audio, or stream from URL',
-      arguments: [
-        {
-          name: 'url',
-          type: 'text',
-          placeholder: 'Paste URL here (YouTube, Twitch, etc.)',
-          required: true,
-        },
-      ],
+      title: 'Download from URL',
     },
-    async (args) => {
-      const providedArgs = args && typeof args === 'object' ? args : {};
-      const urlFromArgs = typeof providedArgs.url === 'string' ? providedArgs.url.trim() : '';
-      return handleDownloadCommand(urlFromArgs || undefined);
+    async () => {
+      return handleDownloadCommand();
+    }
+  );
+
+  sigma.commands.registerCommand(
+    {
+      id: 'setup-youtube-cookies',
+      title: 'Setup YouTube cookies',
+    },
+    async () => {
+      return showCookieSetupModal();
     }
   );
 
