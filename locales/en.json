@@ -1,5 +1,16 @@
 {
   "downloadFromUrl": "Download from URL",
+  "websiteUrl": "Website URL",
+  "pasteUrlHere": "Paste URL here",
+  "supportsYoutubeTwitch": "Supports YouTube, Twitch, and 1000+ other websites",
+  "pasteUrlToSeePreview": "Paste a URL to see preview and options",
+  "checkingUrl": "Checking URL...",
+  "download": "Download",
+  "downloadType": "Download type",
+  "videoQuality": "Video quality",
+  "audioQuality": "Audio quality",
+  "liveFromStartLabel": "Record live stream from beginning (YouTube/Twitch only, experimental)",
+  "untitled": "Untitled",
   "setupYoutubeCookies": "Setup YouTube cookies",
   "previewUnavailable": "Preview unavailable",
   "savedCookiesDidNotUnlock": "Saved YouTube cookies did not unlock this video.",
@@ -31,5 +42,7 @@
   "clearStoredCookies": "Clear stored cookies",
   "selectCookiesFile": "Select cookies.txt file",
   "extensionTitle": "Video Downloader",
-  "recordingStream": "Recording stream..."
+  "recordingStream": "Recording stream...",
+  "failedSetup": "Failed to set up Video Downloader. Try reinstalling the extension.",
+  "youtubeCookiesWarning": "Some YouTube videos need cookies before they can be downloaded."
 }

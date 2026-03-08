@@ -1,5 +1,16 @@
 {
-  "downloadFromUrl": "Download from URL",
+  "downloadFromUrl": "Tải từ URL",
+  "websiteUrl": "URL trang web",
+  "pasteUrlHere": "Dán URL vào đây",
+  "supportsYoutubeTwitch": "Hỗ trợ YouTube, Twitch và 1000+ trang web khác",
+  "pasteUrlToSeePreview": "Dán URL để xem bản xem trước và tùy chọn",
+  "checkingUrl": "Đang kiểm tra URL...",
+  "download": "Tải xuống",
+  "downloadType": "Loại tải",
+  "videoQuality": "Chất lượng video",
+  "audioQuality": "Chất lượng âm thanh",
+  "liveFromStartLabel": "Ghi phát trực tiếp từ đầu (chỉ YouTube/Twitch, thử nghiệm)",
+  "untitled": "Không có tiêu đề",
   "setupYoutubeCookies": "Setup YouTube cookies",
   "previewUnavailable": "Preview unavailable",
   "savedCookiesDidNotUnlock": "Saved YouTube cookies did not unlock this video.",
@@ -31,5 +42,7 @@
   "clearStoredCookies": "Clear stored cookies",
   "selectCookiesFile": "Select cookies.txt file",
   "extensionTitle": "Video Downloader",
-  "recordingStream": "Recording stream..."
+  "recordingStream": "Đang ghi phát trực tiếp...",
+  "failedSetup": "Không thể thiết lập Video Downloader. Hãy thử cài đặt lại tiện ích.",
+  "youtubeCookiesWarning": "Một số video YouTube cần cookie trước khi tải xuống."
 }

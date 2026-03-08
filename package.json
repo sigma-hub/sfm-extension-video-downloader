@@ -2,7 +2,7 @@
   "$schema": "https://raw.githubusercontent.com/aleksey-hoffman/sigma-file-manager/main/packages/api/manifest.schema.json",
   "id": "sigma.video-downloader",
   "name": "Video Downloader",
-  "version": "1.0.8",
+  "version": "1.0.9",
   "publisher": {
     "name": "sigma-hub",
     "url": "https://github.com/sigma-hub"

@@ -1,5 +1,16 @@
 {
-  "downloadFromUrl": "Download from URL",
+  "downloadFromUrl": "دانلود از URL",
+  "websiteUrl": "URL وب‌سایت",
+  "pasteUrlHere": "URL را اینجا بچسبانید",
+  "supportsYoutubeTwitch": "پشتیبانی از YouTube، Twitch و ۱۰۰۰+ وب‌سایت دیگر",
+  "pasteUrlToSeePreview": "URL را بچسبانید تا پیش‌نمایش و گزینه‌ها را ببینید",
+  "checkingUrl": "در حال بررسی URL...",
+  "download": "دانلود",
+  "downloadType": "نوع دانلود",
+  "videoQuality": "کیفیت ویدیو",
+  "audioQuality": "کیفیت صدا",
+  "liveFromStartLabel": "ضبط پخش زنده از ابتدا (فقط YouTube/Twitch، آزمایشی)",
+  "untitled": "بدون عنوان",
   "setupYoutubeCookies": "Setup YouTube cookies",
   "previewUnavailable": "Preview unavailable",
   "savedCookiesDidNotUnlock": "Saved YouTube cookies did not unlock this video.",
@@ -31,5 +42,7 @@
   "clearStoredCookies": "Clear stored cookies",
   "selectCookiesFile": "Select cookies.txt file",
   "extensionTitle": "Video Downloader",
-  "recordingStream": "Recording stream..."
+  "recordingStream": "در حال ضبط پخش...",
+  "failedSetup": "راه‌اندازی Video Downloader ناموفق بود. افزونه را مجدداً نصب کنید.",
+  "youtubeCookiesWarning": "برخی ویدیوهای YouTube برای دانلود به کوکی نیاز دارند."
 }

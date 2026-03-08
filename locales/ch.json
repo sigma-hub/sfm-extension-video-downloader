@@ -1,5 +1,16 @@
 {
-  "downloadFromUrl": "Download from URL",
+  "downloadFromUrl": "从URL下载",
+  "websiteUrl": "网站URL",
+  "pasteUrlHere": "在此粘贴URL",
+  "supportsYoutubeTwitch": "支持 YouTube、Twitch 及 1000+ 其他网站",
+  "pasteUrlToSeePreview": "粘贴URL以查看预览和选项",
+  "checkingUrl": "正在检查URL...",
+  "download": "下载",
+  "downloadType": "下载类型",
+  "videoQuality": "视频质量",
+  "audioQuality": "音频质量",
+  "liveFromStartLabel": "从开始录制直播（仅 YouTube/Twitch，实验性）",
+  "untitled": "无标题",
   "setupYoutubeCookies": "Setup YouTube cookies",
   "previewUnavailable": "Preview unavailable",
   "savedCookiesDidNotUnlock": "Saved YouTube cookies did not unlock this video.",
@@ -31,5 +42,7 @@
   "clearStoredCookies": "Clear stored cookies",
   "selectCookiesFile": "Select cookies.txt file",
   "extensionTitle": "Video Downloader",
-  "recordingStream": "Recording stream..."
+  "recordingStream": "正在录制流...",
+  "failedSetup": "无法设置 Video Downloader。请尝试重新安装扩展。",
+  "youtubeCookiesWarning": "部分 YouTube 视频需要 cookies 才能下载。"
 }

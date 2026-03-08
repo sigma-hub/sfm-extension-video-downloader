@@ -1,5 +1,16 @@
 {
-  "downloadFromUrl": "Download from URL",
+  "downloadFromUrl": "URLからダウンロード",
+  "websiteUrl": "サイトURL",
+  "pasteUrlHere": "URLをここに貼り付け",
+  "supportsYoutubeTwitch": "YouTube、Twitch、1000以上のサイトに対応",
+  "pasteUrlToSeePreview": "URLを貼り付けてプレビューとオプションを表示",
+  "checkingUrl": "URLを確認中...",
+  "download": "ダウンロード",
+  "downloadType": "ダウンロードタイプ",
+  "videoQuality": "画質",
+  "audioQuality": "音質",
+  "liveFromStartLabel": "ライブストリームを最初から録画（YouTube/Twitchのみ、実験的）",
+  "untitled": "無題",
   "setupYoutubeCookies": "Setup YouTube cookies",
   "previewUnavailable": "Preview unavailable",
   "savedCookiesDidNotUnlock": "Saved YouTube cookies did not unlock this video.",
@@ -31,5 +42,7 @@
   "clearStoredCookies": "Clear stored cookies",
   "selectCookiesFile": "Select cookies.txt file",
   "extensionTitle": "Video Downloader",
-  "recordingStream": "Recording stream..."
+  "recordingStream": "ストリーム録画中...",
+  "failedSetup": "Video Downloaderのセットアップに失敗しました。拡張機能を再インストールしてください。",
+  "youtubeCookiesWarning": "一部のYouTube動画はダウンロードする前にCookieが必要です。"
 }

@@ -1,5 +1,16 @@
 {
-  "downloadFromUrl": "Download from URL",
+  "downloadFromUrl": "Prenesi iz URL",
+  "websiteUrl": "URL spletne strani",
+  "pasteUrlHere": "Prilepi URL tukaj",
+  "supportsYoutubeTwitch": "Podpira YouTube, Twitch in 1000+ drugih spletnih mest",
+  "pasteUrlToSeePreview": "Prilepi URL za predogled in možnosti",
+  "checkingUrl": "Preverjanje URL...",
+  "download": "Prenesi",
+  "downloadType": "Vrsta prenosa",
+  "videoQuality": "Kakovost videa",
+  "audioQuality": "Kakovost zvoka",
+  "liveFromStartLabel": "Posnemi prenos v živo od začetka (samo YouTube/Twitch, poskusno)",
+  "untitled": "Brez naslova",
   "setupYoutubeCookies": "Setup YouTube cookies",
   "previewUnavailable": "Preview unavailable",
   "savedCookiesDidNotUnlock": "Saved YouTube cookies did not unlock this video.",
@@ -31,5 +42,7 @@
   "clearStoredCookies": "Clear stored cookies",
   "selectCookiesFile": "Select cookies.txt file",
   "extensionTitle": "Video Downloader",
-  "recordingStream": "Recording stream..."
+  "recordingStream": "Snemanje predvajanja...",
+  "failedSetup": "Ni mogoče nastaviti Video Downloader. Poskusite ponovno namestiti razširitev.",
+  "youtubeCookiesWarning": "Nekateri videoposnetki YouTube potrebujejo piškotke pred prenosom."
 }

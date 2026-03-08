@@ -1,5 +1,16 @@
 {
-  "downloadFromUrl": "Download from URL",
+  "downloadFromUrl": "Scarica da URL",
+  "websiteUrl": "URL del sito",
+  "pasteUrlHere": "Incolla URL qui",
+  "supportsYoutubeTwitch": "Supporta YouTube, Twitch e oltre 1000 altri siti",
+  "pasteUrlToSeePreview": "Incolla un URL per vedere l'anteprima e le opzioni",
+  "checkingUrl": "Verifica URL...",
+  "download": "Scarica",
+  "downloadType": "Tipo di download",
+  "videoQuality": "Qualità video",
+  "audioQuality": "Qualità audio",
+  "liveFromStartLabel": "Registra streaming dal inizio (solo YouTube/Twitch, sperimentale)",
+  "untitled": "Senza titolo",
   "setupYoutubeCookies": "Setup YouTube cookies",
   "previewUnavailable": "Preview unavailable",
   "savedCookiesDidNotUnlock": "Saved YouTube cookies did not unlock this video.",
@@ -31,5 +42,7 @@
   "clearStoredCookies": "Clear stored cookies",
   "selectCookiesFile": "Select cookies.txt file",
   "extensionTitle": "Video Downloader",
-  "recordingStream": "Recording stream..."
+  "recordingStream": "Registrazione streaming...",
+  "failedSetup": "Impossibile configurare Video Downloader. Prova a reinstallare l'estensione.",
+  "youtubeCookiesWarning": "Alcuni video YouTube richiedono i cookie per essere scaricati."
 }

@@ -1,5 +1,16 @@
 {
-  "downloadFromUrl": "Download from URL",
+  "downloadFromUrl": "URL'den indir",
+  "websiteUrl": "Site URL'si",
+  "pasteUrlHere": "URL'yi buraya yapıştırın",
+  "supportsYoutubeTwitch": "YouTube, Twitch ve 1000+ diğer siteyi destekler",
+  "pasteUrlToSeePreview": "Önizleme ve seçenekleri görmek için URL yapıştırın",
+  "checkingUrl": "URL kontrol ediliyor...",
+  "download": "İndir",
+  "downloadType": "İndirme türü",
+  "videoQuality": "Video kalitesi",
+  "audioQuality": "Ses kalitesi",
+  "liveFromStartLabel": "Canlı yayını baştan kaydet (sadece YouTube/Twitch, deneysel)",
+  "untitled": "Başlıksız",
   "setupYoutubeCookies": "Setup YouTube cookies",
   "previewUnavailable": "Preview unavailable",
   "savedCookiesDidNotUnlock": "Saved YouTube cookies did not unlock this video.",
@@ -31,5 +42,7 @@
   "clearStoredCookies": "Clear stored cookies",
   "selectCookiesFile": "Select cookies.txt file",
   "extensionTitle": "Video Downloader",
-  "recordingStream": "Recording stream..."
+  "recordingStream": "Akış kaydediliyor...",
+  "failedSetup": "Video Downloader kurulamadı. Uzantıyı yeniden yüklemeyi deneyin.",
+  "youtubeCookiesWarning": "Bazı YouTube videoları indirilmeden önce çerez gerektirir."
 }

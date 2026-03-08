@@ -456,36 +456,44 @@ function getPreviewErrorState(url, rawError, hasSavedCookies) {
   };
 }
 
-const VIDEO_QUALITY_OPTIONS = [
-  { value: 'best', label: 'Best available' },
-  { value: '1080', label: '1080p' },
-  { value: '720', label: '720p' },
-  { value: '480', label: '480p' },
-  { value: '360', label: '360p' }
-];
+function getVideoQualityOptions(t) {
+  return [
+    { value: 'best', label: t('bestAvailable') },
+    { value: '1080', label: t('quality1080') },
+    { value: '720', label: t('quality720') },
+    { value: '480', label: t('quality480') },
+    { value: '360', label: t('quality360') }
+  ];
+}
 
-const TWITCH_QUALITY_OPTIONS = [
-  { value: 'best', label: 'Source (Best)' },
-  { value: '1080p60', label: '1080p 60fps' },
-  { value: '1080p', label: '1080p' },
-  { value: '720p60', label: '720p 60fps' },
-  { value: '720p', label: '720p' },
-  { value: '480p', label: '480p' },
-  { value: '360p', label: '360p' },
-  { value: 'audio_only', label: 'Audio only' }
-];
+function getTwitchQualityOptions(t) {
+  return [
+    { value: 'best', label: t('sourceBest') },
+    { value: '1080p60', label: t('quality1080p60') },
+    { value: '1080p', label: t('quality1080p') },
+    { value: '720p60', label: t('quality720p60') },
+    { value: '720p', label: t('quality720p') },
+    { value: '480p', label: t('quality480p') },
+    { value: '360p', label: t('quality360p') },
+    { value: 'audio_only', label: t('audioOnly') }
+  ];
+}
 
-const AUDIO_QUALITY_OPTIONS = [
-  { value: 'best', label: 'Best available' },
-  { value: 'medium', label: 'Medium quality' },
-  { value: 'low', label: 'Low quality' }
-];
+function getAudioQualityOptions(t) {
+  return [
+    { value: 'best', label: t('bestAvailable') },
+    { value: 'medium', label: t('mediumQuality') },
+    { value: 'low', label: t('lowQuality') }
+  ];
+}
 
-const DOWNLOAD_MODES = [
-  { value: 'video-audio', label: 'Video + Audio' },
-  { value: 'video-only', label: 'Video only' },
-  { value: 'audio-only', label: 'Audio only' }
-];
+function getDownloadModes(t) {
+  return [
+    { value: 'video-audio', label: t('videoAndAudio') },
+    { value: 'video-only', label: t('videoOnly') },
+    { value: 'audio-only', label: t('audioOnly') }
+  ];
+}
 
 function detectPlatform(url) {
   if (!url) return 'generic';
@@ -811,54 +819,55 @@ async function showCookieSetupModal() {
 }
 
 function buildPreviewContent(url, videoInfo, previewState) {
+  const t = getT();
   const baseContent = [
     sigma.ui.input({
       id: 'url',
-      label: 'Website URL',
-      placeholder: 'Paste URL here',
+      label: t('websiteUrl'),
+      placeholder: t('pasteUrlHere'),
       value: url || '',
     }),
   ];
 
   if (videoInfo && videoInfo.thumbnail) {
     baseContent.push(
-      sigma.ui.text('Supports YouTube, Twitch, and 1000+ other websites'),
+      sigma.ui.text(t('supportsYoutubeTwitch')),
       sigma.ui.previewCard({
         thumbnail: videoInfo.thumbnail,
-        title: videoInfo.title || 'Untitled',
+        title: videoInfo.title || t('untitled'),
         subtitle: videoInfo.subtitle || '',
       }),
       sigma.ui.separator(),
       sigma.ui.select({
         id: 'mode',
-        label: 'Download type',
-        options: DOWNLOAD_MODES,
+        label: t('downloadType'),
+        options: getDownloadModes(t),
         value: 'video-audio',
       }),
       sigma.ui.select({
         id: 'videoQuality',
-        label: 'Video quality',
-        options: VIDEO_QUALITY_OPTIONS,
+        label: t('videoQuality'),
+        options: getVideoQualityOptions(t),
         value: 'best',
       }),
       sigma.ui.select({
         id: 'audioQuality',
-        label: 'Audio quality',
-        options: AUDIO_QUALITY_OPTIONS,
+        label: t('audioQuality'),
+        options: getAudioQualityOptions(t),
         value: 'best',
       }),
       sigma.ui.checkbox({
         id: 'liveFromStart',
-        label: 'Record live stream from beginning (YouTube/Twitch only, experimental)',
+        label: t('liveFromStartLabel'),
         checked: false,
       }),
     );
   } else {
-    baseContent.push(sigma.ui.text('Supports YouTube, Twitch, and 1000+ other websites'));
+    baseContent.push(sigma.ui.text(t('supportsYoutubeTwitch')));
     if (previewState?.statusElements?.length) {
       baseContent.push(...previewState.statusElements);
-    } else if (previewState?.statusText) {
-      baseContent.push({ type: 'text', id: 'status', value: previewState.statusText });
+    } else if (previewState?.statusTextKey) {
+      baseContent.push({ type: 'text', id: 'status', value: t(previewState.statusTextKey) });
     }
     if (previewState?.isLoading) {
       baseContent.push(sigma.ui.previewCardSkeleton());
@@ -999,12 +1008,13 @@ async function createDownloadModal(prefilledUrl) {
   let fetchAborted = false;
 
   return new Promise((resolve) => {
+    const t = getT();
     const modal = sigma.ui.createModal({
-      title: 'Download from URL',
+      title: t('downloadFromUrl'),
       width: 480,
-      content: buildPreviewContent(prefilledUrl || '', null, { statusText: 'Paste a URL to see preview and options' }),
+      content: buildPreviewContent(prefilledUrl || '', null, { statusTextKey: 'pasteUrlToSeePreview' }),
       buttons: [
-        { id: 'download', label: 'Download', variant: 'primary', shortcut: { key: 'Enter' } },
+        { id: 'download', label: t('download'), variant: 'primary', shortcut: { key: 'Enter' } },
       ],
     });
 
@@ -1018,11 +1028,11 @@ async function createDownloadModal(prefilledUrl) {
       videoInfoValid = false;
 
       if (!url) {
-        modal.setContent(buildPreviewContent('', null, { statusText: 'Paste a URL to see preview and options' }));
+        modal.setContent(buildPreviewContent('', null, { statusTextKey: 'pasteUrlToSeePreview' }));
         return;
       }
 
-      modal.setContent(buildPreviewContent(url, null, { statusText: 'Checking URL...', isLoading: true }));
+      modal.setContent(buildPreviewContent(url, null, { statusTextKey: 'checkingUrl', isLoading: true }));
       const urlForFetch = url;
 
       debounceTimeout = setTimeout(async () => {
@@ -1048,7 +1058,7 @@ async function createDownloadModal(prefilledUrl) {
         } catch {
           if (fetchAborted) return;
           modal.setContent(buildPreviewContent(urlForFetch, null, {
-            statusText: 'Failed to set up Video Downloader. Try reinstalling the extension.',
+            statusTextKey: 'failedSetup',
           }));
           return;
         }
@@ -1063,9 +1073,10 @@ async function createDownloadModal(prefilledUrl) {
           const showCookieWarning = isYouTubeUrl && !savedCookiesPath;
           const fullContent = buildPreviewContent(urlForFetch, videoInfo, null);
           if (showCookieWarning) {
+            const t = getT();
             fullContent.push(sigma.ui.separator());
-            fullContent.push(sigma.ui.text('Some YouTube videos need cookies before they can be downloaded.'));
-            fullContent.push({ type: 'button', id: 'setup-cookies', label: 'Setup YouTube cookies', variant: 'primary' });
+            fullContent.push(sigma.ui.text(t('youtubeCookiesWarning')));
+            fullContent.push({ type: 'button', id: 'setup-cookies', label: t('setupYoutubeCookiesLabel'), variant: 'primary' });
           }
           modal.setContent(fullContent);
           modal.updateElement('url', { value: urlForFetch });
