@@ -740,29 +740,29 @@ async function showCookieSetupModal() {
 
   return new Promise((resolve) => {
     const modal = sigma.ui.createModal({
-      title: hasSavedCookies ? 'Manage YouTube cookies' : 'YouTube cookies setup',
+      title: hasSavedCookies ? t('cookiesDialogTitleManage') : t('cookiesDialogTitleSetup'),
       width: 520,
       content: [
-        sigma.ui.text('YouTube now requires login for most videos. Your login data is stored in browser cookies which could not be accessed automatically from your browser because Chrome and Edge use encryption (DPAPI) that prevents direct cookie access.'),
-        sigma.ui.text('To download YouTube videos, you need to export your browser cookies manually and import them into the extension. The extension stores its own managed copy so it no longer depends on the original file after import.'),
+        sigma.ui.text(t('cookiesDialogIntro')),
+        sigma.ui.text(t('cookiesDialogExportInstructions')),
         sigma.ui.separator(),
-        sigma.ui.text('⚠️ Warning: using your YouTube account with yt-dlp risks temporary or permanent bans. Use sparingly or consider a throwaway account.'),
+        sigma.ui.text(t('cookiesDialogWarning')),
         sigma.ui.separator(),
-        sigma.ui.text('How to export cookies:'),
-        sigma.ui.text('1. Install "Get cookies.txt LOCALLY" browser extension (recommended open-source extension, others might steal your login data from cookies):'),
+        sigma.ui.text(t('cookiesDialogHowToExport')),
+        sigma.ui.text(t('cookiesDialogStep1')),
         sigma.ui.text('https://github.com/kairi003/Get-cookies.txt-Locally'),
-        sigma.ui.text('2. Allow the extension in private / incognito mode (browser extension settings)'),
-        sigma.ui.text('3. Open a private / incognito browser window'),
-        sigma.ui.text('4. Log into YouTube in that window'),
-        sigma.ui.text('5. In the same tab, navigate to youtube.com/robots.txt'),
-        sigma.ui.text('6. Use the extension to export youtube.com cookies'),
-        sigma.ui.text('7. Close the incognito window (prevents cookie rotation)'),
-        sigma.ui.text('8. Import the exported cookies.txt file below, then delete the exported file from Downloads or any other folder you used'),
+        sigma.ui.text(t('cookiesDialogStep2')),
+        sigma.ui.text(t('cookiesDialogStep3')),
+        sigma.ui.text(t('cookiesDialogStep4')),
+        sigma.ui.text(t('cookiesDialogStep5')),
+        sigma.ui.text(t('cookiesDialogStep6')),
+        sigma.ui.text(t('cookiesDialogStep7')),
+        sigma.ui.text(t('cookiesDialogStep8')),
       ],
       buttons: [
         {
           id: 'select',
-          label: hasSavedCookies ? t('replaceYoutubeCookies') : 'Import cookies.txt file',
+          label: hasSavedCookies ? t('replaceYoutubeCookies') : t('importCookiesFile'),
           variant: 'primary',
           shortcut: { key: 'Enter' }
         },
@@ -774,7 +774,7 @@ async function showCookieSetupModal() {
       if (buttonId === 'select') {
         const selectedFile = await sigma.dialog.openFile({
           title: t('selectCookiesFile'),
-          filters: [{ name: 'Cookie files', extensions: ['txt'] }],
+          filters: [{ name: t('cookieFilesFilter'), extensions: ['txt'] }],
         });
         const filePath = Array.isArray(selectedFile) ? selectedFile[0] : selectedFile;
         if (!filePath) {
@@ -786,14 +786,14 @@ async function showCookieSetupModal() {
           const managedPath = await importCookiesFile(filePath);
           sigma.ui.showNotification({
             title: t('extensionTitle'),
-            subtitle: 'YouTube cookies imported. You can now delete the exported cookies.txt file you selected.',
+            subtitle: t('cookiesImportedNotification'),
             type: 'success',
           });
           resolve({ action: 'imported', path: managedPath });
         } catch (error) {
           sigma.ui.showNotification({
-            title: 'Video Downloader',
-            subtitle: error?.message || 'Failed to import cookies.txt file.',
+            title: t('extensionTitle'),
+            subtitle: error?.message || t('failedToImportCookies'),
             type: 'error',
           });
           resolve(null);
@@ -804,8 +804,8 @@ async function showCookieSetupModal() {
       if (buttonId === 'clear') {
         await clearStoredCookies();
         sigma.ui.showNotification({
-          title: 'Video Downloader',
-          subtitle: 'Stored YouTube cookies were removed.',
+          title: t('extensionTitle'),
+          subtitle: t('cookiesClearedNotification'),
           type: 'info',
         });
         resolve({ action: 'cleared' });
@@ -1120,7 +1120,7 @@ async function createDownloadModal(prefilledUrl) {
           if (url) {
             onUrlChange(url);
           } else if (cookieSetupResult.action === 'imported') {
-            modal.updateElement('setup-cookies', { label: 'Cookies configured', disabled: true });
+            modal.updateElement('setup-cookies', { label: t('cookiesConfigured'), disabled: true });
           }
         }
         return false;
@@ -1128,8 +1128,8 @@ async function createDownloadModal(prefilledUrl) {
 
       if (buttonId === 'download' && !videoInfoValid) {
         sigma.ui.showNotification({
-          title: 'Video Downloader',
-          subtitle: 'Wait for the preview to load before downloading.',
+          title: t('extensionTitle'),
+          subtitle: t('waitForPreview'),
           type: 'info',
         });
         return false;
@@ -1184,6 +1184,7 @@ async function ensureYtDlpWrapper(ytDlpBinaryPath, denoDir) {
 }
 
 async function runYtDlp(binaryPath, options) {
+  const t = getT();
   const formatSelector = buildFormatSelector(options);
   await ensureToolchainReady();
   const ffmpegPath = await ensureFfmpegInstalled();
@@ -1275,21 +1276,21 @@ async function runYtDlp(binaryPath, options) {
           if (info.speed !== null) lastDownloadState.speed = info.speed;
           if (info.eta !== null) lastDownloadState.eta = info.eta;
           throttledUpdate({
-            subtitle: 'Downloading...',
+            subtitle: t('downloading'),
             description: formatDownloadStats(merged),
             value: Math.max(0, Math.min(100, merged.percent)),
           });
           return;
         }
 
-        throttledUpdate({ subtitle: 'Preparing to download...', description: formatStatusMessage(line) });
+        throttledUpdate({ subtitle: t('preparingToDownload'), description: formatStatusMessage(line) });
         return;
       }
 
       const ffmpegInfo = parseFfmpegProgress(line);
       if (ffmpegInfo) {
         lastDownloadState = { size: null, speed: null, eta: null };
-        const statusTitle = isLiveStream ? 'Recording stream...' : 'Processing...';
+        const statusTitle = isLiveStream ? t('recordingStream') : t('processing');
         throttledUpdate({ subtitle: statusTitle, description: formatStreamProgressMessage(ffmpegInfo) });
         return;
       }
@@ -1300,7 +1301,7 @@ async function runYtDlp(binaryPath, options) {
         || line.includes('[FixupM3u8]')
       ) {
         lastDownloadState = { size: null, speed: null, eta: null };
-        throttledUpdate({ subtitle: 'Finalizing...', description: '' });
+        throttledUpdate({ subtitle: t('finalizing'), description: '' });
         return;
       }
 
@@ -1312,7 +1313,7 @@ async function runYtDlp(binaryPath, options) {
         || line.includes('[generic')
         || line.match(/^\[\w+\]/)
       ) {
-        throttledUpdate({ subtitle: 'Preparing to download...', description: formatStatusMessage(line) });
+        throttledUpdate({ subtitle: t('preparingToDownload'), description: formatStatusMessage(line) });
       }
   };
 
@@ -1351,7 +1352,7 @@ async function runYtDlp(binaryPath, options) {
   }
 
   if (options.cookiesFilePath) {
-    throttledUpdate({ subtitle: 'Downloading with cookies...', description: '' });
+    throttledUpdate({ subtitle: t('downloadingWithCookies'), description: '' });
     const cookiesArgs = buildYtDlpArgs(ytDlpOptions, formatSelector, [
       '--cookies', options.cookiesFilePath,
     ]);
@@ -1360,10 +1361,11 @@ async function runYtDlp(binaryPath, options) {
       return { success: true, needsCookieSetup: false };
     }
     if (!isCancelled) {
+      const t = getT();
       const errorMessage = extractErrorFromStderr(cookiesResult.stderr || '');
       sigma.ui.showNotification({
-        title: 'Download failed',
-        subtitle: errorMessage || 'yt-dlp exited with an error. Check the URL and try again.',
+        title: t('downloadFailed'),
+        subtitle: errorMessage || t('ytdlpErrorCheckUrl'),
         type: 'error'
       });
     }
@@ -1377,7 +1379,7 @@ async function runYtDlp(binaryPath, options) {
     if (shouldRetryWithBrowserCookies(options, fullOutput)) {
       const savedCookiesPath = await getSavedCookiesPath();
       if (savedCookiesPath && !isCancelled) {
-        throttledUpdate({ subtitle: 'Checking browser cookies...', description: 'Trying saved cookies file' });
+        throttledUpdate({ subtitle: t('checkingBrowserCookies'), description: t('tryingSavedCookies') });
         const savedCookiesArgs = buildYtDlpArgs(ytDlpOptions, formatSelector, [
           '--cookies', savedCookiesPath,
         ]);
@@ -1400,7 +1402,7 @@ async function runYtDlp(binaryPath, options) {
           '--extractor-args',
           'youtube:player_client=tv,ios,web',
         ]);
-        throttledUpdate({ subtitle: 'Checking browser cookies...', description: 'Trying alternate YouTube clients' });
+        throttledUpdate({ subtitle: t('checkingBrowserCookies'), description: t('tryingAlternateClients') });
         const extractorRetryResult = await runYtDlpAttempt(extractorRetryArgs, 'youtube-client-fallback');
         commandResult = extractorRetryResult;
       }
@@ -1417,7 +1419,7 @@ async function runYtDlp(binaryPath, options) {
           console.log(`[Video Downloader] Skipping ${browserName} (DPAPI decryption failed for another Chromium browser)`);
           continue;
         }
-        throttledUpdate({ subtitle: 'Checking browser cookies...', description: `Trying ${browserName}` });
+        throttledUpdate({ subtitle: t('checkingBrowserCookies'), description: t('tryingBrowser', { browserName }) });
         const retryExtraArgs = [
           '--cookies-from-browser',
           browserName,
@@ -1457,22 +1459,23 @@ async function runYtDlp(binaryPath, options) {
       return { success: false, needsCookieSetup: true };
     }
 
+    const t = getT();
     if (needsLogin) {
       sigma.ui.showNotification({
-        title: 'Download failed',
-        subtitle: 'This video requires YouTube login. Use the "Setup YouTube cookies" command to configure cookie access.',
+        title: t('downloadFailed'),
+        subtitle: t('videoRequiresLogin'),
         type: 'error'
       });
     } else if (needsJsRuntime) {
       sigma.ui.showNotification({
-        title: 'Download failed',
-        subtitle: 'YouTube requires a JavaScript runtime (Deno). Try reinstalling the extension.',
+        title: t('downloadFailed'),
+        subtitle: t('youtubeNeedsDeno'),
         type: 'error'
       });
     } else {
       sigma.ui.showNotification({
-        title: 'Download failed',
-        subtitle: errorMessage || 'yt-dlp exited with an error. Try updating yt-dlp by reinstalling the extension.',
+        title: t('downloadFailed'),
+        subtitle: errorMessage || t('ytdlpErrorReinstall'),
         type: 'error'
       });
     }
@@ -1482,6 +1485,7 @@ async function runYtDlp(binaryPath, options) {
 }
 
 async function handleDownloadCommand(prefilledUrl) {
+  const t = getT();
   const modalResult = await createDownloadModal(prefilledUrl);
 
   if (!modalResult || !modalResult.url) {
@@ -1504,9 +1508,10 @@ async function handleDownloadCommand(prefilledUrl) {
       outputDir = await sigma.context.getDownloadsDir();
       usedFallback = true;
     } catch (error) {
+      const t = getT();
       sigma.ui.showNotification({
-        title: 'Video Downloader',
-        subtitle: 'Could not determine download location. Open a folder in the navigator and try again.',
+        title: t('extensionTitle'),
+        subtitle: t('couldNotDetermineLocation'),
         type: 'error'
       });
       return;
@@ -1514,16 +1519,17 @@ async function handleDownloadCommand(prefilledUrl) {
   }
 
   if (usedFallback) {
+    const t = getT();
     sigma.ui.showNotification({
-      title: 'Video Downloader',
-      subtitle: 'No folder open in navigator. Downloading to Downloads folder.',
+      title: t('extensionTitle'),
+      subtitle: t('downloadingToDownloads'),
       type: 'info',
     });
   }
 
   let isLiveStream = modalResult.platform === 'twitch-live';
 
-  const progressTitle = isLiveStream ? 'Recording stream' : 'Downloading video';
+  const progressTitle = isLiveStream ? t('recordingStream') : t('downloadingVideo');
 
   const progressResult = await sigma.ui.withProgress(
     {
@@ -1535,8 +1541,8 @@ async function handleDownloadCommand(prefilledUrl) {
       let onCancelHandler = null;
       token.onCancellationRequested(() => {
         const stoppedMessage = isLiveStream
-          ? 'Recording stopped. Video saved up to this point.'
-          : 'Download stopped';
+          ? t('recordingStopped')
+          : t('downloadStopped');
         progress.report({ subtitle: stoppedMessage, description: '' });
         if (onCancelHandler) {
           onCancelHandler();
@@ -1570,7 +1576,7 @@ async function handleDownloadCommand(prefilledUrl) {
       }
 
       if (downloadResult && downloadResult.success) {
-        progress.report({ description: 'Download complete', value: 100 });
+        progress.report({ description: t('downloadComplete'), value: 100 });
         await sleep(1500);
       }
 
@@ -1639,9 +1645,10 @@ async function handleInstallActivation() {
     await ensureToolchainReady();
     await ensureCookieUnlockPlugin();
   } catch (error) {
+    const t = getT();
     sigma.ui.showNotification({
-      title: 'Video Downloader',
-      subtitle: error.message || 'Failed to set up Video Downloader',
+      title: t('extensionTitle'),
+      subtitle: error.message || t('failedToSetupExtension'),
       type: 'error'
     });
   }
