@@ -86,5 +86,8 @@
   "tryingSavedCookies": "Prova file cookie salvati",
   "tryingAlternateClients": "Prova client YouTube alternativi",
   "tryingBrowser": "Prova {browserName}",
-  "downloadingWithCookies": "Download con cookie..."
+  "downloadingWithCookies": "Download con cookie...",
+  "settings.title": "Impostazioni Video Downloader",
+  "settings.autoUpdateBinary": "Aggiornamento automatico",
+  "settings.autoUpdateBinaryDescription": "Controlla e scarica aggiornamenti yt-dlp all'avvio"
 }

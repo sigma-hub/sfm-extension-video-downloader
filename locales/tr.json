@@ -86,5 +86,8 @@
   "tryingSavedCookies": "Kayıtlı çerez dosyası deneniyor",
   "tryingAlternateClients": "Alternatif YouTube istemcileri deneniyor",
   "tryingBrowser": "{browserName} deneniyor",
+  "settings.title": "Video Downloader Ayarları",
+  "settings.autoUpdateBinary": "İkili dosyayı otomatik güncelle",
+  "settings.autoUpdateBinaryDescription": "Başlangıçta yt-dlp güncellemelerini kontrol et ve indir",
   "downloadingWithCookies": "Çerezlerle indiriliyor..."
 }

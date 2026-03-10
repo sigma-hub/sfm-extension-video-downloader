@@ -86,5 +86,8 @@
   "tryingSavedCookies": "正在尝试使用已保存的 cookies 文件",
   "tryingAlternateClients": "正在尝试其他 YouTube 客户端",
   "tryingBrowser": "正在尝试 {browserName}",
-  "downloadingWithCookies": "正在使用 cookies 下载..."
+  "downloadingWithCookies": "正在使用 cookies 下载...",
+  "settings.title": "Video Downloader 设置",
+  "settings.autoUpdateBinary": "自动更新",
+  "settings.autoUpdateBinaryDescription": "启动时自动检查并下载 yt-dlp 更新"
 }

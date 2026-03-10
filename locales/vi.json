@@ -86,5 +86,8 @@
   "tryingSavedCookies": "Đang thử file cookie đã lưu",
   "tryingAlternateClients": "Đang thử các client YouTube thay thế",
   "tryingBrowser": "Đang thử {browserName}",
-  "downloadingWithCookies": "Đang tải xuống với cookie..."
+  "downloadingWithCookies": "Đang tải xuống với cookie...",
+  "settings.title": "Cài đặt Video Downloader",
+  "settings.autoUpdateBinary": "Tự động cập nhật",
+  "settings.autoUpdateBinaryDescription": "Tự động kiểm tra và tải cập nhật yt-dlp khi khởi động"
 }

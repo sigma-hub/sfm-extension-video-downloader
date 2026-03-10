@@ -86,5 +86,8 @@
   "tryingSavedCookies": "Poskus z shranjeno datoteko piškotkov",
   "tryingAlternateClients": "Poskus z alternativnimi YouTube odjemalci",
   "tryingBrowser": "Poskus z {browserName}",
-  "downloadingWithCookies": "Prenos s piškotki..."
+  "downloadingWithCookies": "Prenos s piškotki...",
+  "settings.title": "Nastavitve Video Downloader",
+  "settings.autoUpdateBinary": "Samodejna posodobitev",
+  "settings.autoUpdateBinaryDescription": "Ob zagonu preveri in prenese posodobitve yt-dlp"
 }

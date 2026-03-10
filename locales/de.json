@@ -86,5 +86,8 @@
   "tryingSavedCookies": "Gespeicherte Cookies-Datei wird ausprobiert",
   "tryingAlternateClients": "Alternative YouTube-Clients werden ausprobiert",
   "tryingBrowser": "Wird ausprobiert: {browserName}",
-  "downloadingWithCookies": "Wird mit Cookies heruntergeladen..."
+  "downloadingWithCookies": "Wird mit Cookies heruntergeladen...",
+  "settings.title": "Video Downloader Einstellungen",
+  "settings.autoUpdateBinary": "Binärdatei automatisch aktualisieren",
+  "settings.autoUpdateBinaryDescription": "Automatisch auf yt-dlp-Updates prüfen und bei Start herunterladen"
 }

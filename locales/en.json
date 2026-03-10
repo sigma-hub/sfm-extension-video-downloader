@@ -86,5 +86,9 @@
   "tryingSavedCookies": "Trying saved cookies file",
   "tryingAlternateClients": "Trying alternate YouTube clients",
   "tryingBrowser": "Trying {browserName}",
-  "downloadingWithCookies": "Downloading with cookies..."
+  "downloadingWithCookies": "Downloading with cookies...",
+  "settings.title": "Video Downloader Settings",
+  "settings.description": "Download videos, playlists, audio, and streams from YouTube, Twitch, and 1000+ other websites",
+  "settings.autoUpdateBinary": "Auto-update binary",
+  "settings.autoUpdateBinaryDescription": "Automatically check for and download open-source tool yt-dlp updates on app startup"
 }

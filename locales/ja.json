@@ -86,5 +86,8 @@
   "tryingSavedCookies": "保存済みCookieファイルを試しています",
   "tryingAlternateClients": "代替YouTubeクライアントを試しています",
   "tryingBrowser": "{browserName}を試しています",
+  "settings.title": "Video Downloader の設定",
+  "settings.autoUpdateBinary": "バイナリを自動更新",
+  "settings.autoUpdateBinaryDescription": "起動時に yt-dlp の更新を確認してダウンロード",
   "downloadingWithCookies": "Cookieでダウンロード中..."
 }

@@ -65,7 +65,7 @@
   "cookiesClearedNotification": "Сохранённые cookies YouTube удалены.",
   "cookieFilesFilter": "Файлы cookies",
   "cookiesConfigured": "Cookies настроены",
-  "waitForPreview": "Дождитесь загрузки превью перед скачиванием.",
+  "waitForPreview": "Подождите, пока превью загрузится, перед скачиванием.",
   "downloadFailed": "Ошибка загрузки",
   "ytdlpErrorCheckUrl": "yt-dlp завершился с ошибкой. Проверьте URL и попробуйте снова.",
   "ytdlpErrorReinstall": "yt-dlp завершился с ошибкой. Попробуйте переустановить расширение для обновления yt-dlp.",
@@ -86,5 +86,9 @@
   "tryingSavedCookies": "Попытка использовать сохранённый файл cookies",
   "tryingAlternateClients": "Попытка использовать альтернативные клиенты YouTube",
   "tryingBrowser": "Попытка использовать {browserName}",
-  "downloadingWithCookies": "Загрузка с cookies..."
+  "downloadingWithCookies": "Загрузка с cookies...",
+  "settings.title": "Настройки Video Downloader",
+  "settings.description": "Загрузка видео, плейлистов, аудио и потоков с YouTube, Twitch и 1000+ других сайтов",
+  "settings.autoUpdateBinary": "Автообновление yt-dlp",
+  "settings.autoUpdateBinaryDescription": "Автоматически проверять и загружать обновления yt-dlp при запуске"
 }
