@@ -606,6 +606,7 @@ function buildYtDlpArgs(options, formatSelector, extraArgs = []) {
   const args = [
     '--no-playlist',
     '--newline',
+    '--restrict-filenames',
     '--progress-template',
     progressTemplate,
     '--remote-components',
