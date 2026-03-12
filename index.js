@@ -445,14 +445,15 @@ function getPreviewErrorState(url, rawError, hasSavedCookies) {
     };
   }
 
+  const isYoutube = platform === 'youtube';
   return {
     statusElements: buildPreviewNoticeElements({
       title: t('couldNotLoadPreview'),
       description: t('urlInvalidOrUnavailable'),
       detail: normalizedError ? t('tryDifferentUrlOrRetry') : '',
     }),
-    needsCookieSetup: false,
-    cookieButtonLabel: 'Setup YouTube cookies',
+    needsCookieSetup: isYoutube,
+    cookieButtonLabel: hasSavedCookies ? t('replaceYoutubeCookies') : t('setupYoutubeCookiesLabel'),
   };
 }
 
@@ -1014,9 +1015,7 @@ async function createDownloadModal(prefilledUrl) {
       title: t('downloadFromUrl'),
       width: 480,
       content: buildPreviewContent(prefilledUrl || '', null, { statusTextKey: 'pasteUrlToSeePreview' }),
-      buttons: [
-        { id: 'download', label: t('download'), variant: 'primary', shortcut: { key: 'Enter' } },
-      ],
+      buttons: [],
     });
 
     async function onUrlChange(urlValue) {
@@ -1030,10 +1029,12 @@ async function createDownloadModal(prefilledUrl) {
 
       if (!url) {
         modal.setContent(buildPreviewContent('', null, { statusTextKey: 'pasteUrlToSeePreview' }));
+        modal.setButtons([]);
         return;
       }
 
       modal.setContent(buildPreviewContent(url, null, { statusTextKey: 'checkingUrl', isLoading: true }));
+      modal.setButtons([]);
       const urlForFetch = url;
 
       debounceTimeout = setTimeout(async () => {
@@ -1061,6 +1062,7 @@ async function createDownloadModal(prefilledUrl) {
           modal.setContent(buildPreviewContent(urlForFetch, null, {
             statusTextKey: 'failedSetup',
           }));
+          modal.setButtons([]);
           return;
         }
 
@@ -1068,16 +1070,22 @@ async function createDownloadModal(prefilledUrl) {
         if (fetchAborted) return;
 
         if (videoInfo && videoInfo.thumbnail) {
-          videoInfoValid = true;
           const isYouTubeUrl = detectPlatform(urlForFetch) === 'youtube';
           const savedCookiesPath = await getSavedCookiesPath();
           const showCookieWarning = isYouTubeUrl && !savedCookiesPath;
+          const showDownloadButton = !showCookieWarning;
+          if (showDownloadButton) {
+            videoInfoValid = true;
+          }
           const fullContent = buildPreviewContent(urlForFetch, videoInfo, null);
           if (showCookieWarning) {
             const t = getT();
             fullContent.push(sigma.ui.separator());
             fullContent.push(sigma.ui.text(t('youtubeCookiesWarning')));
             fullContent.push({ type: 'button', id: 'setup-cookies', label: t('setupYoutubeCookiesLabel'), variant: 'primary' });
+            modal.setButtons([]);
+          } else {
+            modal.setButtons([{ id: 'download', label: t('download'), variant: 'primary', shortcut: { key: 'Enter' } }]);
           }
           modal.setContent(fullContent);
           modal.updateElement('url', { value: urlForFetch });
@@ -1098,6 +1106,7 @@ async function createDownloadModal(prefilledUrl) {
             });
           }
           modal.setContent(errorContent);
+          modal.setButtons([]);
           modal.updateElement('url', { value: urlForFetch });
         }
       }, 400);
@@ -1124,15 +1133,6 @@ async function createDownloadModal(prefilledUrl) {
             modal.updateElement('setup-cookies', { label: t('cookiesConfigured'), disabled: true });
           }
         }
-        return false;
-      }
-
-      if (buttonId === 'download' && !videoInfoValid) {
-        sigma.ui.showNotification({
-          title: t('extensionTitle'),
-          subtitle: t('waitForPreview'),
-          type: 'info',
-        });
         return false;
       }
 
