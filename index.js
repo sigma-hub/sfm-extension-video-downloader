@@ -4,8 +4,120 @@
  * @typedef {import('@sigma-file-manager/api').ExtensionActivationContext} ExtensionActivationContext
  */
 
+const extensionMessages = {
+  downloadFromUrl: 'Download from URL',
+  websiteUrl: 'Website URL',
+  pasteUrlHere: 'Paste URL here',
+  supportsYoutubeTwitch: 'Supports YouTube, Twitch, and 1000+ other websites',
+  pasteUrlToSeePreview: 'Paste a URL to see preview and options',
+  checkingUrl: 'Checking URL...',
+  download: 'Download',
+  downloadType: 'Download type',
+  videoQuality: 'Video quality',
+  audioQuality: 'Audio quality',
+  liveFromStartLabel: 'Record live stream from beginning (YouTube/Twitch only, experimental)',
+  untitled: 'Untitled',
+  setupYoutubeCookies: 'Setup YouTube cookies',
+  previewUnavailable: 'Preview unavailable',
+  savedCookiesDidNotUnlock: 'Saved YouTube cookies did not unlock this video.',
+  youtubeNeedsCookies: 'YouTube needs cookies to load the title and thumbnail.',
+  replaceCookiesAndRetry: 'Replace your cookies and try again.',
+  setupYoutubeCookiesButton: 'Click the button below to set up YouTube cookies.',
+  couldNotLoadPreview: 'Could not load preview',
+  urlInvalidOrUnavailable: 'The URL may be invalid, temporarily unavailable, or blocked by the website.',
+  tryDifferentUrlOrRetry: 'You can try a different URL or retry in a moment.',
+  replaceYoutubeCookies: 'Replace YouTube cookies',
+  setupYoutubeCookiesLabel: 'Setup YouTube cookies',
+  bestAvailable: 'Best available',
+  quality1080: '1080p',
+  quality720: '720p',
+  quality480: '480p',
+  quality360: '360p',
+  sourceBest: 'Source (Best)',
+  quality1080p60: '1080p 60fps',
+  quality1080p: '1080p',
+  quality720p60: '720p 60fps',
+  quality720p: '720p',
+  quality480p: '480p',
+  quality360p: '360p',
+  audioOnly: 'Audio only',
+  mediumQuality: 'Medium quality',
+  lowQuality: 'Low quality',
+  videoAndAudio: 'Video + Audio',
+  videoOnly: 'Video only',
+  clearStoredCookies: 'Clear stored cookies',
+  selectCookiesFile: 'Select cookies.txt file',
+  extensionTitle: 'Video Downloader',
+  recordingStream: 'Recording stream...',
+  failedSetup: 'Failed to set up Video Downloader. Try reinstalling the extension.',
+  youtubeCookiesWarning: 'Some YouTube videos need cookies before they can be downloaded.',
+  cookiesDialogTitleManage: 'Manage YouTube cookies',
+  cookiesDialogTitleSetup: 'YouTube cookies setup',
+  cookiesDialogIntro: 'YouTube now requires login for most videos. Your login data is stored in browser cookies which could not be accessed automatically from your browser because Chrome and Edge use encryption (DPAPI) that prevents direct cookie access.',
+  cookiesDialogExportInstructions: 'To download YouTube videos, you need to export your browser cookies manually and import them into the extension. The extension stores its own managed copy so it no longer depends on the original file after import.',
+  cookiesDialogWarning: '⚠️ Warning: using your YouTube account with yt-dlp risks temporary or permanent bans. Use sparingly or consider a throwaway account.',
+  cookiesDialogHowToExport: 'How to export cookies:',
+  cookiesDialogStep1: '1. Install "Get cookies.txt LOCALLY" browser extension (recommended open-source extension, others might steal your login data from cookies):',
+  cookiesDialogStep2: '2. Allow the extension in private / incognito mode (browser extension settings)',
+  cookiesDialogStep3: '3. Open a private / incognito browser window',
+  cookiesDialogStep4: '4. Log into YouTube in that window',
+  cookiesDialogStep5: '5. In the same tab, navigate to youtube.com/robots.txt',
+  cookiesDialogStep6: '6. Use the extension to export youtube.com cookies',
+  cookiesDialogStep7: '7. Close the incognito window (prevents cookie rotation)',
+  cookiesDialogStep8: '8. Import the exported cookies.txt file below, then delete the exported file from Downloads or any other folder you used',
+  importCookiesFile: 'Import cookies.txt file',
+  cookiesImportedNotification: 'YouTube cookies imported. You can now delete the exported cookies.txt file you selected.',
+  failedToImportCookies: 'Failed to import cookies.txt file.',
+  cookiesClearedNotification: 'Stored YouTube cookies were removed.',
+  cookieFilesFilter: 'Cookie files',
+  cookiesConfigured: 'Cookies configured',
+  waitForPreview: 'Wait for the preview to load before downloading.',
+  downloadFailed: 'Download failed',
+  ytdlpErrorCheckUrl: 'yt-dlp exited with an error. Check the URL and try again.',
+  ytdlpErrorReinstall: 'yt-dlp exited with an error. Try updating yt-dlp by reinstalling the extension.',
+  videoRequiresLogin: 'This video requires YouTube login. Use the "Setup YouTube cookies" command to configure cookie access.',
+  youtubeNeedsDeno: 'YouTube requires a JavaScript runtime (Deno). Try reinstalling the extension.',
+  couldNotDetermineLocation: 'Could not determine download location. Open a folder in the file browser and try again.',
+  downloadingToDownloads: 'No folder open in the file browser. Downloading to Downloads folder.',
+  downloadingVideo: 'Downloading video',
+  recordingStopped: 'Recording stopped. Video saved up to this point.',
+  downloadStopped: 'Download stopped',
+  downloadComplete: 'Download complete',
+  failedToSetupExtension: 'Failed to set up Video Downloader',
+  downloading: 'Downloading...',
+  preparingToDownload: 'Preparing to download...',
+  processing: 'Processing...',
+  finalizing: 'Finalizing...',
+  checkingBrowserCookies: 'Checking browser cookies...',
+  tryingSavedCookies: 'Trying saved cookies file',
+  tryingAlternateClients: 'Trying alternate YouTube clients',
+  tryingBrowser: 'Trying {browserName}',
+  downloadingWithCookies: 'Downloading with cookies...',
+  'settings.title': 'Video Downloader Settings',
+  'settings.description': 'Download videos, playlists, audio, and streams from YouTube, Twitch, and 1000+ other websites',
+  'settings.autoUpdateBinary': 'Auto-update binary',
+  'settings.autoUpdateBinaryDescription': 'Automatically check for and download open-source tool yt-dlp updates on app startup',
+};
+
+function formatMessage(template, params) {
+  if (!params) {
+    return template;
+  }
+
+  return String(template).replace(/\{(\w+)\}/g, (fullMatch, paramKey) => {
+    return Object.prototype.hasOwnProperty.call(params, paramKey)
+      ? String(params[paramKey])
+      : fullMatch;
+  });
+}
+
 function getT() {
-  return (key, params) => sigma?.i18n?.extensionT?.(key, params) ?? key;
+  return (key, params) => {
+    const translated = sigma.i18n.extensionT(key, params);
+    return translated === `extensions.sigma.video-downloader.${key}`
+      ? formatMessage(extensionMessages[key] ?? key, params)
+      : translated;
+  };
 }
 
 const YTDLP_BINARY_ID = 'yt-dlp';
@@ -144,10 +256,7 @@ function getFfprobeExecutable() {
 
 function getDirectoryFromPath(binaryPath) {
   if (!binaryPath) return null;
-  const separator = sigma.platform.pathSeparator;
-  const lastSeparatorIndex = binaryPath.lastIndexOf(separator);
-  if (lastSeparatorIndex === -1) return null;
-  return binaryPath.substring(0, lastSeparatorIndex);
+  return sigma.path.dirname(binaryPath);
 }
 
 function normalizePathForComparison(pathValue) {
@@ -215,19 +324,17 @@ async function getSavedCookiesPath() {
 
 function getDenoDirectory() {
   if (!cachedDenoBinaryPath) return null;
-  const separator = sigma.platform.pathSeparator;
-  const lastSep = cachedDenoBinaryPath.lastIndexOf(separator);
-  if (lastSep === -1) return null;
-  return cachedDenoBinaryPath.substring(0, lastSep);
+  return sigma.path.dirname(cachedDenoBinaryPath);
 }
 
 async function ensureDenoInstalled() {
   if (cachedDenoBinaryPath) return cachedDenoBinaryPath;
 
   try {
+    const denoDownloadUrl = getDenoDownloadUrl(sigma.platform.os);
     const denoPath = await sigma.binary.ensureInstalled(DENO_BINARY_ID, {
       name: 'deno',
-      downloadUrl: getDenoDownloadUrl,
+      downloadUrl: denoDownloadUrl,
     });
     cachedDenoBinaryPath = denoPath;
     console.log('[Video Downloader] Deno available at:', denoPath);
@@ -551,9 +658,10 @@ async function ensureBinaryInstalled() {
     console.warn('[Video Downloader] Failed to check/remove old yt-dlp:', error);
   }
 
+  const ytDlpDownloadUrl = getYtDlpDownloadUrl(sigma.platform.os);
   const binaryPath = await sigma.binary.ensureInstalled(YTDLP_BINARY_ID, {
     name: 'yt-dlp',
-    downloadUrl: getYtDlpDownloadUrl,
+    downloadUrl: ytDlpDownloadUrl,
   });
 
   await sigma.storage.set('ytdlp-channel', 'nightly');
@@ -1057,7 +1165,8 @@ async function createDownloadModal(prefilledUrl) {
             pluginDir,
             cookiesFilePath: savedCookiesPath || undefined,
           };
-        } catch {
+        } catch (toolchainError) {
+          console.warn('[Video Downloader] Toolchain setup failed:', toolchainError);
           if (fetchAborted) return;
           modal.setContent(buildPreviewContent(urlForFetch, null, {
             statusTextKey: 'failedSetup',
@@ -1496,7 +1605,7 @@ async function handleDownloadCommand(prefilledUrl) {
   const installResult = await ensureBinaryInstalled();
   await ensureToolchainReady();
 
-  let outputDir = sigma.context.getCurrentPath();
+  let outputDir = await sigma.context.getCurrentPath();
   let usedFallback = false;
 
   const ytDlpBinaryDir = getDirectoryFromPath(installResult.binaryPath);
@@ -1690,7 +1799,7 @@ async function handleUninstallActivation() {
 /**
  * @param {ExtensionActivationContext} context
  */
-async function activate(context) {
+export async function activate(context) {
   await sigma.i18n.mergeFromPath('locales');
 
   cachedExtensionStoragePath = context?.storagePath || null;
@@ -1725,9 +1834,12 @@ async function activate(context) {
   }
 }
 
-async function deactivate() {
-}
-
-if (typeof module !== 'undefined') {
-  module.exports = { activate, deactivate };
+export async function deactivate() {
+  cachedDenoBinaryPath = null;
+  cachedFfmpegBinaryPath = null;
+  cachedFfprobeBinaryPath = null;
+  cachedPluginDirPath = null;
+  cachedWrapperPath = null;
+  cachedExtensionStoragePath = null;
+  startupActivationPromise = null;
 }
