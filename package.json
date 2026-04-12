@@ -1,0 +1,215 @@
+{
+  "$schema": "./node_modules/@sigma-file-manager/api/manifest.schema.json",
+  "id": "sigma.video-downloader",
+  "name": "Video Downloader",
+  "version": "1.0.0",
+  "publisher": {
+    "name": "sigma-hub",
+    "url": "https://github.com/sigma-hub"
+  },
+  "repository": "https://github.com/sigma-hub/sfm-extension-video-downloader",
+  "license": "MIT",
+  "categories": [
+    "Media"
+  ],
+  "platforms": [
+    "windows",
+    "macos",
+    "linux"
+  ],
+  "extensionType": "api",
+  "type": "module",
+  "main": "dist/index.js",
+  "icon": "icon.png",
+  "media": [
+    {
+      "title": "Preview",
+      "src": "preview-1.jpg",
+      "type": "image"
+    }
+  ],
+  "permissions": [
+    "commands",
+    "notifications",
+    "dialogs",
+    "fs.read",
+    "fs.write",
+    "shell"
+  ],
+  "activationEvents": [
+    "onInstall",
+    "onUninstall",
+    "onStartup",
+    "onUpdate",
+    "onEnable",
+    "onDisable",
+    "onCommand:sigma.video-downloader.download-video",
+    "onCommand:sigma.video-downloader.setup-youtube-cookies"
+  ],
+  "contributes": {
+    "commands": [
+      {
+        "id": "download-video",
+        "title": "Download from URL",
+        "description": "Download videos, playlists, audio, and streams from YouTube, Twitch, and 1000+ other websites"
+      },
+      {
+        "id": "setup-youtube-cookies",
+        "title": "Setup YouTube cookies",
+        "description": "Import, replace, or clear the managed cookies.txt file used for YouTube downloads"
+      }
+    ]
+  },
+  "engines": {
+    "sigmaFileManager": ">=2.0.0"
+  },
+  "scripts": {
+    "build": "tsc",
+    "prepare": "npm run build"
+  },
+  "devDependencies": {
+    "@sigma-file-manager/api": "^1.5.0",
+    "typescript": "~5.8.0"
+  },
+  "binaries": [
+    {
+      "id": "yt-dlp",
+      "name": "yt-dlp",
+      "version": "2026.03.17",
+      "repository": "https://github.com/yt-dlp/yt-dlp",
+      "assets": [
+        {
+          "platform": "windows",
+          "arch": [
+            "x64"
+          ],
+          "downloadUrl": "https://github.com/yt-dlp/yt-dlp/releases/download/2026.03.17/yt-dlp.exe",
+          "integrity": "sha256:3db811b366b2da47337d2fcfdfe5bbd9a258dad3f350c54974f005df115a1545",
+          "executable": "yt-dlp.exe"
+        },
+        {
+          "platform": "windows",
+          "arch": [
+            "arm64"
+          ],
+          "downloadUrl": "https://github.com/yt-dlp/yt-dlp/releases/download/2026.03.17/yt-dlp_arm64.exe",
+          "integrity": "sha256:6cfba1af5147da0196d8c015961b1422bdd47fc2f9bb6df8cb4d1dc029939c51",
+          "executable": "yt-dlp.exe"
+        },
+        {
+          "platform": "macos",
+          "downloadUrl": "https://github.com/yt-dlp/yt-dlp/releases/download/2026.03.17/yt-dlp_macos",
+          "integrity": "sha256:e80c47b3ce712acee51d5e3d4eace2d181b44d38f1942c3a32e3c7ff53cd9ed5",
+          "executable": "yt-dlp"
+        },
+        {
+          "platform": "linux",
+          "arch": [
+            "x64"
+          ],
+          "downloadUrl": "https://github.com/yt-dlp/yt-dlp/releases/download/2026.03.17/yt-dlp_linux",
+          "integrity": "sha256:c2b0189f581fe4a2ddd41954f1bcb7d327db04b07ed0dea97e4f1b3e09b5dd8e",
+          "executable": "yt-dlp"
+        },
+        {
+          "platform": "linux",
+          "arch": [
+            "arm64"
+          ],
+          "downloadUrl": "https://github.com/yt-dlp/yt-dlp/releases/download/2026.03.17/yt-dlp_linux_aarch64",
+          "integrity": "sha256:6bfa19736181da9e2e066f9c767da2f24fdcc5e148fa5034d1feb09132f89ad5",
+          "executable": "yt-dlp"
+        }
+      ]
+    },
+    {
+      "id": "deno",
+      "name": "Deno",
+      "version": "2.7.11",
+      "repository": "https://github.com/denoland/deno",
+      "assets": [
+        {
+          "platform": "windows",
+          "arch": [
+            "x64"
+          ],
+          "downloadUrl": "https://github.com/denoland/deno/releases/download/v2.7.11/deno-x86_64-pc-windows-msvc.zip",
+          "integrity": "sha256:8bd617ed5d999115eaa249edba493ab313afb32be94fcb2c71db1828a8376eb8",
+          "archive": true,
+          "executable": "deno.exe"
+        },
+        {
+          "platform": "macos",
+          "arch": [
+            "x64"
+          ],
+          "downloadUrl": "https://github.com/denoland/deno/releases/download/v2.7.11/deno-x86_64-apple-darwin.zip",
+          "integrity": "sha256:a01abae36024b9a6cfa9ffa5fa8325d71993e115fb7a8ab79f2720fe83b7fb5b",
+          "archive": true,
+          "executable": "deno"
+        },
+        {
+          "platform": "macos",
+          "arch": [
+            "arm64"
+          ],
+          "downloadUrl": "https://github.com/denoland/deno/releases/download/v2.7.11/deno-aarch64-apple-darwin.zip",
+          "integrity": "sha256:2da6fd51ad6af3b8711ff327b448b76b1dc8ee75678842aff637b6827205d8bd",
+          "archive": true,
+          "executable": "deno"
+        },
+        {
+          "platform": "linux",
+          "arch": [
+            "x64"
+          ],
+          "downloadUrl": "https://github.com/denoland/deno/releases/download/v2.7.11/deno-x86_64-unknown-linux-gnu.zip",
+          "integrity": "sha256:16990cd4f3728b82b0f1432b233214fe793a0e03c27d77a2ee89f27b3e984097",
+          "archive": true,
+          "executable": "deno"
+        },
+        {
+          "platform": "linux",
+          "arch": [
+            "arm64"
+          ],
+          "downloadUrl": "https://github.com/denoland/deno/releases/download/v2.7.11/deno-aarch64-unknown-linux-gnu.zip",
+          "integrity": "sha256:1c9024937e711d17c20bc0fd510147aba6d5315ed6cfbe0fa0e6d3cee8a681b7",
+          "archive": true,
+          "executable": "deno"
+        }
+      ]
+    },
+    {
+      "id": "ffmpeg",
+      "name": "FFmpeg",
+      "version": "8.1",
+      "repository": "https://ffmpeg.org",
+      "platforms": [
+        "windows"
+      ],
+      "assets": [
+        {
+          "platform": "windows",
+          "arch": [
+            "x64"
+          ],
+          "downloadUrl": "https://github.com/BtbN/FFmpeg-Builds/releases/download/autobuild-2026-04-06-13-14/ffmpeg-n8.1-7-ga3475e2554-win64-gpl-8.1.zip",
+          "integrity": "sha256:573edb512a81540f93b7936d2605fff1e36a6a4a28e3255958f89bec7871029d",
+          "archive": true,
+          "executable": "bin/ffmpeg.exe"
+        },
+        {
+          "platform": "windows",
+          "arch": [
+            "arm64"
+          ],
+          "downloadUrl": "https://github.com/BtbN/FFmpeg-Builds/releases/download/autobuild-2026-04-06-13-14/ffmpeg-n8.1-7-ga3475e2554-winarm64-gpl-8.1.zip",
+          "integrity": "sha256:f4993eadd5a43ab0281465cfc43f722253b13ff7b78289f5031ef884c0cea166",
+          "archive": true,
+          "executable": "bin/ffmpeg.exe"
+        }
+      ]
+    }
+  ]
+}
