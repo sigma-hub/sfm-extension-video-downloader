@@ -2,12 +2,20 @@ const t = sigma.i18n.extensionT;
 const YTDLP_BINARY_ID = 'yt-dlp';
 const DENO_BINARY_ID = 'deno';
 const FFMPEG_BINARY_ID = 'ffmpeg';
+const FFPROBE_BINARY_ID = 'ffprobe';
 const COOKIES_LEGACY_SOURCE_PATH_STORAGE_KEY = 'cookies-file-path';
 const MANAGED_COOKIES_RELATIVE_PATH = 'secrets/youtube-cookies.txt';
 let cachedDenoBinaryPath = null;
 let cachedFfmpegBinaryPath = null;
 let cachedFfprobeBinaryPath = null;
 let cachedExtensionStoragePath = null;
+function getFfprobeExecutableName() {
+    return sigma.platform.isWindows ? 'ffprobe.exe' : 'ffprobe';
+}
+function deriveSiblingFfprobePath(ffmpegPath) {
+    const ffmpegDirectory = sigma.path.dirname(ffmpegPath);
+    return `${ffmpegDirectory}${sigma.platform.pathSeparator}${getFfprobeExecutableName()}`;
+}
 function sleep(milliseconds) {
     return new Promise((resolve) => setTimeout(resolve, milliseconds));
 }
@@ -108,11 +116,11 @@ async function ensureFfmpegInstalled() {
             return null;
         }
         cachedFfmpegBinaryPath = ffmpegPath;
-        cachedFfprobeBinaryPath = ffmpegPath.replace(/ffmpeg(\.exe)?$/i, `ffprobe${sigma.platform.isWindows ? '.exe' : ''}`);
-        console.log('[Video Downloader] ffmpeg available at:', ffmpegPath);
-        if (cachedFfprobeBinaryPath) {
+        if (!sigma.platform.isMacos) {
+            cachedFfprobeBinaryPath = deriveSiblingFfprobePath(ffmpegPath);
             console.log('[Video Downloader] ffprobe expected at:', cachedFfprobeBinaryPath);
         }
+        console.log('[Video Downloader] ffmpeg available at:', ffmpegPath);
         return ffmpegPath;
     }
     catch (error) {
@@ -122,25 +130,50 @@ async function ensureFfmpegInstalled() {
         return null;
     }
 }
+async function ensureFfprobeInstalled() {
+    if (cachedFfprobeBinaryPath)
+        return cachedFfprobeBinaryPath;
+    try {
+        const ffprobePath = await sigma.binary.getPath(FFPROBE_BINARY_ID);
+        if (!ffprobePath) {
+            return null;
+        }
+        cachedFfprobeBinaryPath = ffprobePath;
+        console.log('[Video Downloader] ffprobe available at:', ffprobePath);
+        return ffprobePath;
+    }
+    catch (error) {
+        if (sigma.runtime.isExtensionInstallCancelledError(error))
+            throw error;
+        console.error('[Video Downloader] Failed to resolve ffprobe path:', error);
+        return null;
+    }
+}
 async function ensureToolchainReady() {
     const denoPath = await ensureDenoInstalled();
     if (!denoPath) {
         throw new Error('Failed to install Deno runtime');
     }
     const ffmpegPath = await ensureFfmpegInstalled();
-    if (sigma.platform.isWindows && !ffmpegPath) {
+    if (!ffmpegPath) {
         throw new Error('Failed to install ffmpeg binary');
     }
-    if (sigma.platform.isWindows) {
-        const ffprobePath = cachedFfprobeBinaryPath
-            || (ffmpegPath ? ffmpegPath.replace(/ffmpeg(\.exe)?$/i, `ffprobe${sigma.platform.isWindows ? '.exe' : ''}`) : null);
+    if (sigma.platform.isMacos) {
+        const ffprobePath = await ensureFfprobeInstalled();
         if (!ffprobePath) {
-            throw new Error('ffprobe path could not be resolved');
+            throw new Error('Failed to install ffprobe binary');
         }
         const ffprobeExists = await sigma.fs.exists(ffprobePath);
         if (!ffprobeExists) {
-            throw new Error('ffprobe binary is missing from the ffmpeg package');
+            throw new Error('ffprobe binary is missing after install');
         }
+        return;
+    }
+    const ffprobePath = cachedFfprobeBinaryPath || deriveSiblingFfprobePath(ffmpegPath);
+    cachedFfprobeBinaryPath = ffprobePath;
+    const ffprobeExists = await sigma.fs.exists(ffprobePath);
+    if (!ffprobeExists) {
+        throw new Error('ffprobe binary is missing from the ffmpeg package');
     }
 }
 async function renamePartFilesToTs(directory) {
@@ -719,7 +752,11 @@ async function createDownloadModal(prefilledUrl) {
                     await ensureToolchainReady();
                     const denoPath = cachedDenoBinaryPath || await ensureDenoInstalled();
                     const denoDir = getDirectoryFromPath(denoPath);
-                    const wrapperPath = denoDir ? await ensureYtDlpWrapper(installResult.binaryPath, denoDir) : null;
+                    const ffmpegDir = getDirectoryFromPath(cachedFfmpegBinaryPath);
+                    const ffprobeDir = getDirectoryFromPath(cachedFfprobeBinaryPath);
+                    const wrapperPath = denoDir
+                        ? await ensureYtDlpWrapper(installResult.binaryPath, [denoDir, ffmpegDir, ffprobeDir])
+                        : null;
                     effectiveBinaryPath = wrapperPath || installResult.binaryPath;
                     const platform = detectPlatform(urlForFetch);
                     const savedCookiesPath = platform === 'youtube' ? await getSavedCookiesPath() : null;
@@ -838,17 +875,25 @@ async function createDownloadModal(prefilledUrl) {
     });
 }
 let cachedWrapperPath = null;
-async function ensureYtDlpWrapper(ytDlpBinaryPath, denoDir) {
+async function ensureYtDlpWrapper(ytDlpBinaryPath, pathPrependDirs) {
     if (cachedWrapperPath)
         return cachedWrapperPath;
+    const uniqueDirs = [];
+    for (const directory of pathPrependDirs) {
+        if (directory && !uniqueDirs.includes(directory)) {
+            uniqueDirs.push(directory);
+        }
+    }
     if (sigma.platform.isWindows) {
-        const script = `@echo off\r\nset "PATH=${denoDir};%PATH%"\r\n"${ytDlpBinaryPath}" %*\r\n`;
+        const pathPrefix = uniqueDirs.join(';');
+        const script = `@echo off\r\nset "PATH=${pathPrefix};%PATH%"\r\n"${ytDlpBinaryPath}" %*\r\n`;
         const wrapperRelativePath = 'yt-dlp-wrapper.cmd';
         await sigma.fs.private.writeFile(wrapperRelativePath, new TextEncoder().encode(script));
         cachedWrapperPath = await sigma.fs.private.resolvePath(wrapperRelativePath);
     }
     else {
-        const script = `#!/bin/sh\nexport PATH="${denoDir}:$PATH"\n"${ytDlpBinaryPath}" "$@"\n`;
+        const pathPrefix = uniqueDirs.join(':');
+        const script = `#!/bin/sh\nexport PATH="${pathPrefix}:$PATH"\n"${ytDlpBinaryPath}" "$@"\n`;
         const wrapperRelativePath = 'yt-dlp-wrapper.sh';
         await sigma.fs.private.writeFile(wrapperRelativePath, new TextEncoder().encode(script));
         cachedWrapperPath = await sigma.fs.private.resolvePath(wrapperRelativePath);
@@ -861,17 +906,22 @@ async function runYtDlp(binaryPath, options) {
     await ensureToolchainReady();
     const ffmpegPath = await ensureFfmpegInstalled();
     const ffmpegDir = getDirectoryFromPath(ffmpegPath);
+    const ffprobeDir = getDirectoryFromPath(cachedFfprobeBinaryPath);
     const denoPath = cachedDenoBinaryPath || await ensureDenoInstalled();
     const denoDir = getDirectoryFromPath(denoPath);
-    const wrapperPath = denoDir ? await ensureYtDlpWrapper(binaryPath, denoDir) : null;
+    const wrapperPath = denoDir
+        ? await ensureYtDlpWrapper(binaryPath, [denoDir, ffmpegDir, ffprobeDir])
+        : null;
     const effectiveBinaryPath = wrapperPath || binaryPath;
     console.log('[Video Downloader] Using ffmpeg path:', ffmpegPath);
+    console.log('[Video Downloader] Using ffprobe path:', cachedFfprobeBinaryPath);
     console.log('[Video Downloader] Using deno path:', denoPath);
     console.log('[Video Downloader] Using wrapper:', effectiveBinaryPath);
+    const ffmpegAndFfprobeColocated = ffmpegDir !== null && ffmpegDir === ffprobeDir;
     const ytDlpOptions = {
         ...options,
-        ffmpegPath,
-        ffmpegDir,
+        ffmpegPath: ffmpegAndFfprobeColocated ? ffmpegPath : null,
+        ffmpegDir: ffmpegAndFfprobeColocated ? ffmpegDir : null,
         denoPath,
     };
     const defaultArgs = buildYtDlpArgs(ytDlpOptions, formatSelector);

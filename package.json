@@ -2,7 +2,7 @@
   "$schema": "./node_modules/@sigma-file-manager/api/manifest.schema.json",
   "id": "sigma.video-downloader",
   "name": "Video Downloader",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "publisher": {
     "name": "sigma-hub",
     "url": "https://github.com/sigma-hub"
@@ -185,17 +185,14 @@
       "name": "FFmpeg",
       "version": "8.1",
       "repository": "https://ffmpeg.org",
-      "platforms": [
-        "windows"
-      ],
       "assets": [
         {
           "platform": "windows",
           "arch": [
             "x64"
           ],
-          "downloadUrl": "https://github.com/BtbN/FFmpeg-Builds/releases/download/autobuild-2026-04-06-13-14/ffmpeg-n8.1-7-ga3475e2554-win64-gpl-8.1.zip",
-          "integrity": "sha256:573edb512a81540f93b7936d2605fff1e36a6a4a28e3255958f89bec7871029d",
+          "downloadUrl": "https://github.com/BtbN/FFmpeg-Builds/releases/download/autobuild-2026-03-31-13-11/ffmpeg-n8.1-7-ga3475e2554-win64-gpl-8.1.zip",
+          "integrity": "sha256:052df9b4d96bbe033456a87723d76f0efa14d1b77f01130ba3899332f0a10b9a",
           "archive": true,
           "executable": "bin/ffmpeg.exe"
         },
@@ -204,10 +201,81 @@
           "arch": [
             "arm64"
           ],
-          "downloadUrl": "https://github.com/BtbN/FFmpeg-Builds/releases/download/autobuild-2026-04-06-13-14/ffmpeg-n8.1-7-ga3475e2554-winarm64-gpl-8.1.zip",
-          "integrity": "sha256:f4993eadd5a43ab0281465cfc43f722253b13ff7b78289f5031ef884c0cea166",
+          "downloadUrl": "https://github.com/BtbN/FFmpeg-Builds/releases/download/autobuild-2026-03-31-13-11/ffmpeg-n8.1-7-ga3475e2554-winarm64-gpl-8.1.zip",
+          "integrity": "sha256:fcf8db06d27557a35e772ea8a6d4633de2add3682ab27d1cce1fbe9ef71f0511",
           "archive": true,
           "executable": "bin/ffmpeg.exe"
+        },
+        {
+          "platform": "linux",
+          "arch": [
+            "x64"
+          ],
+          "downloadUrl": "https://github.com/BtbN/FFmpeg-Builds/releases/download/autobuild-2026-03-31-13-11/ffmpeg-n8.1-7-ga3475e2554-linux64-gpl-8.1.tar.xz",
+          "integrity": "sha256:86aa72199be1f828fa895e1c854e27241a66e038ba23b091ae3b78b5f00814ac",
+          "archive": true,
+          "executable": "bin/ffmpeg"
+        },
+        {
+          "platform": "linux",
+          "arch": [
+            "arm64"
+          ],
+          "downloadUrl": "https://github.com/BtbN/FFmpeg-Builds/releases/download/autobuild-2026-03-31-13-11/ffmpeg-n8.1-7-ga3475e2554-linuxarm64-gpl-8.1.tar.xz",
+          "integrity": "sha256:d5c185e158cf8805fd5f5a7679e0bed28cc2565888ee37c31a02ab1d43943bd1",
+          "archive": true,
+          "executable": "bin/ffmpeg"
+        },
+        {
+          "platform": "macos",
+          "arch": [
+            "x64"
+          ],
+          "downloadUrl": "https://ffmpeg.martin-riedl.de/download/macos/amd64/1774556648_8.1/ffmpeg.zip",
+          "integrity": "sha256:eaa8aa619f8eccc7f548a730097f5d299cbf2d418888421c137557344d821130",
+          "archive": true,
+          "executable": "ffmpeg"
+        },
+        {
+          "platform": "macos",
+          "arch": [
+            "arm64"
+          ],
+          "downloadUrl": "https://ffmpeg.martin-riedl.de/download/macos/arm64/1774549676_8.1/ffmpeg.zip",
+          "integrity": "sha256:cc3a7e0cce36c5eca6c17eeb93830984c657637a8e710dc98f19c8051201fa3a",
+          "archive": true,
+          "executable": "ffmpeg"
+        }
+      ]
+    },
+    {
+      "id": "ffprobe",
+      "name": "FFprobe",
+      "version": "8.1",
+      "repository": "https://ffmpeg.org",
+      "platforms": [
+        "macos"
+      ],
+      "assets": [
+        {
+          "platform": "macos",
+          "arch": [
+            "x64"
+          ],
+          "downloadUrl": "https://ffmpeg.martin-riedl.de/download/macos/amd64/1774556648_8.1/ffprobe.zip",
+          "integrity": "sha256:221bd0716dc15daf5745c5503773e5c23264c10c5ea956aa17ef492bbc0b0ac7",
+          "archive": true,
+          "executable": "ffprobe"
+        },
+        {
+          "platform": "macos",
+          "arch": [
+            "arm64"
+          ],
+          "downloadUrl": "https://ffmpeg.martin-riedl.de/download/macos/arm64/1774549676_8.1/ffprobe.zip",
+          "integrity": "sha256:fd2e6b7fad9c9aa2bec17c0d7211b5afcc00b4b5c9b63c120985e80c3c198af6",
+          "archive": true,
+          "executable": "ffprobe"
         }
       ]
     }
